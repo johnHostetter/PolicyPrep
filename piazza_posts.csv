@@ -1,0 +1,73 @@
+id,subject,content
+507,Lab 2: Pyrenees,"
+
+
+
+
+
+Lab 2, known as Pyrenees, is available now and can be accessed from Moodle. The lab will be due Friday, April 21st, at 11:59 pm.
+
+
+
+
+
+"
+568,lab 2 honest feedback,"Hello. I would like to give a honest feedback on what I thought about the lab overall in case you all wanted feedback on how it went. For the textbook, I liked the way the practice problems were given to help us understand the concepts better as we went through which helped a lot to understand it. The pre-lab and post-lab wasn't bad at all, I just wish we could've seen what we made on the quiz or shown if it was wrong and how it should be solved like from the textbook. The training was not helping me at all. I spent more time trying to figure out what the AI tutor wanted me to put in the textbox vs actually learning from it. I would have what the AI wanted but because I put a P(A) and not just A, it would say it was wrong and would have me so confused about what I did wrong to where I had to use the help button to figure it out just to see it was what I put before. I honestly had to stop doing the lab after the training part because it was having me stressed more than it should've. Overall, I feel like the training part wasn't helping me learn with so much clicking and just putting in the formula instead of trying to figure out the problem when it's giving us the numbers of everything already, but besides that, the rest of the lab was good, understanding and fair."
+553,Error in lab 2 question.,"Hello. there appears to be a typo here. it should be p(A|O'), but it says p(A'|O').
+I got it right after that.
+My answer panel for this may look strange as a result.
+"
+552,Didn’t show answers for some textbook problems,"If we didn’t show as much work in the initial textbook section, but put in effort into the rest of the lab, will we still get an A?
+(I was an idiot and didn't realize showing work was important during the textbook section :/ )
+
+Thanks a lot!"
+551,"Lab 2, Part 3 Q11 Bug","Not sure if anyone else has run into this issue, but I cannot get past Question 11 on the lab due to a software malfunction. When entering an equation, the system will not accept my input as correct despite it being so.
+
+I even double-checked the input under the Help button and input the exact same phrase, and the system rejected it. I'm not sure how to resolve this but I would appreciate any help."
+550,Probability Tutor Question: Not sure how to start or what rule to use?,"
+Hello, Im stuck on this problem, Im a bit confused on which rule to use or how to go about starting it? Any guidance?"
+548,How is lab 2 graded? What is the weight of lab 2?,"Hello, I am in the middle of Part 3 -- Training for Lab 2 and was wondering how this lab would be graded, if I had gotten thus far, would I at least be given partial credit. With finals coming up and other final projects due, I don't have the time to really spend on this lab right now and was looking for partial credit at least. I also wanted to know how much the grade of lab 2 is weighed in the total of our grade? Thank you."
+545,How to go back in Lab 2,"Hey there,
+
+I just realized while starting to work on Practice 2 that I did Practice 1 wrong (didn't realize I was supposed to show work).
+
+Could you please tell me how to go back to that section?
+
+Thanks."
+538,pyrenees,"When I open the tutor it says ""finished"" but i never completed all of the problems and the quiz. is there a way it could be reset? my username is nakestin."
+534,lab 2 grade,"I remember hearing that our grade is based on the effort we put into the lab. So for say even if we put the effort in the post-quiz and say we got all of them wrong, would we still get an A in the lab just for the fact we tried our best? or does the grade on the post quiz also comes into our grade plus the effort we put in it?"
+529,Issue on the lab pre-quiz,When I was completing the pre-quiz I completely misread the instructions and did not put the steps that I used to get my answers. Is there anyway I can go back and fill in the steps I used to get each answer?
+528,How do I start part 3 of lab 2?,"I'm on part 3 of the lab and It's not giving me the option to do anything for the problem so what did I miss that requires me to do the problem?
+Screenshot_2023-04-16_at_3.59.21_PM.png"
+526,Wrong answer for textbook problem,"I was just wondering if there's any penalty for getting questions wrong within the textbook problems and problems in the other sections of the lab. I didn't thoroughly think through the problem and put an answer. Is it ok if the answer isn't right? Will a right answer make up for the wrong answer? This is an example:
+
+"
+521,Question,"Question 7:  So I did this problem using the demorgans law and got 0.9 then I did it doing the addition therom and the independent events threom and got 0.8 I am not sure why they would not be the same answer. (0.2+0.4+0.5)-(0)-(0.1)-(0.2)-(0)= 0.8. 
+"
+518,Lab 2 Working,How are we going to be graded for the lab 2 practice problems? Is it going to be based on how much stuff are put into each problem or will it be based on completion?
+509,Help with Lab 2,"Hello! I have been trying to figure out this problem for over an hour but I feel like there is too much information missing in order to do anything. I am not sure what I am missing but I have tried various approaches to get p(M|G) but all have been unsuccessful. What approach should we be using on this problem? Thank you!
+
+This is what I have tried:
+p(C) = 0.6
+p(P) = 0.2
+p(M) = 0.2
+
+p(G|M) = 0.8
+p(G|C) = 0.9
+p(P|G) = 0.2
+
+p(G|P) = p(P|G)*p(G) / p(P)
+
+p(M|G) = ?
+p(M|G) = 1 - p(P|G) - p(C|G)
+p(M|G) = p(M∩G) / p(G)
+p(M|G) = p(G|M)*p(M) / p(G|M)*p(M) + p(G|C)*p(C) + p(G|P)*p(P)
+(0.8)(0.2) / (0.8)(0.2) + (0.9)(0.6) + (p(P|G)*p(G) / p(P))*p(P)
+0.16 / 0.16 + 0.54 + (0.2)(p(G)
+
+p(G) = p(G|M)*p(M) + p(G|C)*p(C) + p(G|P)*p(P)
+I am unable to solve for p(G) since I am missing p(G|P).
+
+"
+505,Lab 2 Access and Due Date,"I don't believe a due date was mentioned in class today, nor is the lab accessible in Moodle at the moment.
+When can we start working on it, and when will it be due?"
