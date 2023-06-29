@@ -8,6 +8,16 @@ from typing import Union
 from YACS.yacs import Config
 
 
+def path_to_project_root() -> pathlib.Path:
+    """
+    Return the path to the root of the project.
+
+    Returns:
+        The path to the root of the project.
+    """
+    return pathlib.Path(__file__).parent.parent
+
+
 def load_configuration(config_path: Union[str, pathlib.Path] = "default_configuration.yaml") -> \
         Config:
     """
@@ -19,6 +29,6 @@ def load_configuration(config_path: Union[str, pathlib.Path] = "default_configur
     Returns:
         The configuration settings.
     """
-    config_path = pathlib.Path(__file__).parent.parent / config_path
+    config_path = path_to_project_root() / config_path
     # Config could only be instantiated from dict, yaml filepath, or an argparse.Namespace object
     return Config(str(config_path))

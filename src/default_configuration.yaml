@@ -1,4 +1,6 @@
 data:
+  folder:  # this is the shareable link to the folder containing the Pyrenees data
+    name: https://drive.google.com/drive/folders/1GhSpf6jIuzsBuCYf6bqheV58WioxyoxI
   features:
     basic:
       - recordID
@@ -144,7 +146,6 @@ data:
       - nIndeProb
       - nCompProb
       - nMutualProb
-
     step:
       - ntellsSinceElicit
       - ntellsSinceElicitKC
