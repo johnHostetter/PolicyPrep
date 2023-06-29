@@ -1,17 +1,25 @@
 """
-This module implements functions to download the semester data from the Google Drive folder. Essentially, this saves us
-the time from having to collect all relevant training data, as subsequent steps in the pipeline can simply load the data
-from the downloaded folder.
+This module implements functions to download the semester data from the Google Drive folder.
+Essentially, this saves us the time from having to collect all relevant training data, as subsequent
+steps in the pipeline can simply load the data from the downloaded folder.
 """
+import os
 import gdown
 
-from utils.reproducibility import path_to_project_root
+from src.utils.reproducibility import path_to_project_root, load_configuration
 
-# import pandas as pd
+if __name__ == "__main__":
+    # load the configuration settings
+    config = load_configuration()
 
-# download the data from the database on Google Drive
+    # download the data from the database on Google Drive
+    gdown.download_folder(
+        url=config.data.folder.name,
+        output=str(path_to_project_root()),
+    )
 
-gdown.download_folder(
-    url="https://drive.google.com/drive/folders/1GhSpf6jIuzsBuCYf6bqheV58WioxyoxI",
-    output=str(path_to_project_root())
-)
+    # rename the folder to lowercase
+    os.rename(
+        src=str(path_to_project_root() / "Data"),
+        dst=str(path_to_project_root() / "data"),
+    )
