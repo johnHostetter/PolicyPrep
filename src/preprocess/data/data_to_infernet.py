@@ -39,7 +39,7 @@ if __name__ == "__main__":
         problemLevelFeatureFrame[
             (problemLevelFeatureFrame["decisionPoint"] == "probEnd")
             & (~problemLevelFeatureFrame["problem"].isin(["ex252", "ex252w"]))
-            ].index,
+        ].index,
         inplace=True,
     )
     problemLevelFeatureFrame["action"] = ""
@@ -54,7 +54,7 @@ if __name__ == "__main__":
             problem = problemLevelFeatureFrame.iloc[i]["problem"]
             uniqueActions = subSteps[
                 (subSteps["userID"] == userID) & (subSteps["problem"] == problem)
-                ]["substepMode"].unique()
+            ]["substepMode"].unique()
             if len(uniqueActions) == 2:
                 problemLevelFeatureFrame.iat[i, actionColumnLocation] = "step_decision"
             else:
@@ -78,12 +78,14 @@ if __name__ == "__main__":
         stepLevelFeatureFrame = features[
             (features["decisionPoint"].isin(["stepStart", "probEnd"]))
             & (features["problem"].isin([problem, problem + "w"]))
-            ]
+        ]
         stepLevelFeatureFrame["action"] = ""
         stepLevelFeatureFrame["reward"] = ""
         actionColumnLocation = stepLevelFeatureFrame.columns.get_loc("action")
 
-        stepLevelSubStepFrame = subSteps[subSteps["problem"].isin([problem, problem + "w"])]
+        stepLevelSubStepFrame = subSteps[
+            subSteps["problem"].isin([problem, problem + "w"])
+        ]
 
         # Feature Frame has an extra "probEnd" per problem per user. Since we are at the current problem, it has an additional #NumberofUser rows
         if len(stepLevelFeatureFrame) != len(stepLevelSubStepFrame) + userCount:
@@ -107,9 +109,9 @@ if __name__ == "__main__":
                 )
                 sys.exit(1)
 
-            stepLevelFeatureFrame.iat[i, actionColumnLocation] = stepLevelSubStepFrame.iloc[
-                sub_step_counter
-            ]["substepMode"]
+            stepLevelFeatureFrame.iat[
+                i, actionColumnLocation
+            ] = stepLevelSubStepFrame.iloc[sub_step_counter]["substepMode"]
             sub_step_counter += 1
 
         stepLevelFeatureFrame.to_csv(

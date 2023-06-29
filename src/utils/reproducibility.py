@@ -15,7 +15,7 @@ def path_to_project_root() -> pathlib.Path:
     Returns:
         The path to the root of the project.
     """
-    return pathlib.Path(__file__).parent.parent
+    return pathlib.Path(__file__).parent.parent.parent
 
 
 def load_configuration(config_path: Union[str, pathlib.Path] = "default_configuration.yaml") -> \

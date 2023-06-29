@@ -3,7 +3,6 @@ This module implements functions to download the semester data from the Google D
 Essentially, this saves us the time from having to collect all relevant training data, as subsequent
 steps in the pipeline can simply load the data from the downloaded folder.
 """
-import os
 import gdown
 
 from src.utils.reproducibility import path_to_project_root, load_configuration
@@ -15,11 +14,5 @@ if __name__ == "__main__":
     # download the data from the database on Google Drive
     gdown.download_folder(
         url=config.data.folder.name,
-        output=str(path_to_project_root()),
-    )
-
-    # rename the folder to lowercase
-    os.rename(
-        src=str(path_to_project_root() / "Data"),
-        dst=str(path_to_project_root() / "data"),
+        output=str(path_to_project_root() / "data"),
     )
