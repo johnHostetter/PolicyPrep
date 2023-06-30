@@ -6,10 +6,12 @@ folder, not the Experiment folder. The generated format of the training data is 
 InferNet code.
 """
 import sys
-from typing import Tuple, Union
+from pathlib import Path
+from typing import Tuple, Union, List, Callable
 
 import pandas as pd
 
+from YACS.yacs import Config
 from src.utils.reproducibility import load_configuration, path_to_project_root
 
 
@@ -47,7 +49,9 @@ def minimum_id(semester: str) -> int:
     return year_int + semester_int + 100
 
 
-def iterate_over_semester_data() -> None:
+def iterate_over_semester_data(
+    function_to_perform: Callable[[Path, str, int, int, Config], None]
+) -> None:
     """
     Iterate over the different semesters of training data and generate the training data with action
     and reward columns.
@@ -58,16 +62,6 @@ def iterate_over_semester_data() -> None:
     # load the configuration settings
     pd.options.mode.chained_assignment = None
     config = load_configuration("default_configuration.yaml")
-
-    # load the grades data
-    try:
-        grades_df = pd.read_csv(
-            str(path_to_project_root() / "data" / "weighted_F15_F22.csv"),
-            header=0,
-        )
-    except FileNotFoundError:
-        print("Pipeline cannot proceed (no grades file found).")
-        sys.exit(1)
 
     # iterate over the different semesters of training data
 
@@ -81,6 +75,7 @@ def iterate_over_semester_data() -> None:
         if " - " not in semester_folder.name:
             print(f"Skipping {semester_folder.name} (invalid directory name)...")
             continue
+
         # the name of the semester is the part of the folder name after the " - "
         # e.g. "10 - S21" -> "S21"; the part before the " - " is the folder ordering number
         (_, semester_name) = semester_folder.name.split(" - ")
@@ -88,174 +83,344 @@ def iterate_over_semester_data() -> None:
 
         year_int, semester_int = make_year_and_semester_int(semester_name)
 
-        # load the data
-
         try:
-            substep_info_df = pd.read_csv(
-                str(semester_folder / "PostProcessing" / "substep_info.csv"), header=0
+            function_to_perform(
+                semester_folder, semester_name, year_int, semester_int, config
             )
-        except FileNotFoundError:
+        except FileNotFoundError as file_not_found_error:
             print(
-                f"Skipping {semester_folder.name} (no substep_info.csv file "
+                f"Skipping {semester_folder.name} (no {file_not_found_error.filename} file "
                 f"found for this semester)..."
             )
             continue
-        substep_info_df["userID"] = substep_info_df["userID"].astype(int)
+
+
+def convert_data_format(
+    semester_folder: Path,
+    semester_name: str,
+    year_int: int,
+    semester_int: int,
+    config: Config,
+) -> None:
+    """
+    Convert the data to the format required by the InferNet training scripts.
+
+    Args:
+        semester_folder: The path to the folder containing the semester data.
+        semester_name: The name of the semester, e.g. "S21".
+        year_int: The year encoded as an integer (e.g., "23" for 2023).
+        semester_int: The semester encoded as integer (e.g., "1" for Spring, "3" for Fall).
+        config: The configuration settings.
+
+    Returns:
+        None
+    """
+    # load the grades data
+    try:
+        grades_df = pd.read_csv(
+            str(path_to_project_root() / "data" / "weighted_F15_F22.csv"),
+            header=0,
+        )
+    except FileNotFoundError:
+        print("Pipeline cannot proceed (no grades file found).")
+        sys.exit(1)
+
+    # get the substep info dataframe
+    substep_info_df = get_substep_info_df(semester_folder, semester_name, year_int, semester_int)
+    # make the output directories for the training data
+    output_directory = make_data_subdirectory(
+        "with_delayed_rewards", semester_folder.name
+    )
+    # get the problems for the semester
+    problems = get_problems(substep_info_df)
+    # get the problem-level and step-level features dataframes
+    prob_features_df, step_features_df = get_problem_and_step_level_features_df(
+        semester_folder, semester_name, year_int, semester_int, config
+    )
+    # convert the data to the format required by the training scripts
+    convert_problem_level_format(
+        output_directory,
+        semester_name,
+        prob_features_df,
+        substep_info_df,
+        grades_df,
+    )
+    convert_step_level_format(
+        output_directory,
+        semester_name,
+        step_features_df,
+        substep_info_df,
+        problems,
+    )
+
+
+def get_problem_and_step_level_features_df(
+    semester_folder: Path, semester_name: str, year_int: int, semester_int: int, config: Config
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Get the problem-level and step-level features dataframes.
+
+    Args:
+        semester_folder: The path to the semester folder.
+        semester_name: The name of the semester, e.g. "S21".
+        year_int: The year encoded as an integer (e.g., "23" for 2023).
+        semester_int: The semester encoded as integer (e.g., "1" for Spring, "3" for Fall).
+        config: The configuration settings.
+
+    Returns:
+        The problem-level and step-level features dataframes.
+    """
+    # need to prepare problem-level training data with action and reward columns
+    prob_features_df = pd.read_csv(
+        str(semester_folder / "PostProcessing" / "features_all.csv"),
+        header=0,
+        usecols=config.data.features.basic + config.data.features.problem,
+    )
+    # need to prepare step-level training data with action column
+    step_features_df = pd.read_csv(
+        str(semester_folder / "PostProcessing" / "features_all.csv"),
+        header=0,
+        usecols=config.data.features.basic + config.data.features.step,
+    )
+
+    # update the user IDs to be unique across all semesters
+    if prob_features_df["userID"].dtype == "object":
+        prob_features_df["userID"] = prob_features_df["userID"].astype("int64")
+    if step_features_df["userID"].dtype == "object":
+        step_features_df["userID"] = step_features_df["userID"].astype("int64")
+
+    if prob_features_df["userID"].min() < minimum_id(semester_name):
+        prob_features_df["userID"] = prob_features_df["userID"] + year_int + semester_int
+    if step_features_df["userID"].min() < minimum_id(semester_name):
+        step_features_df["userID"] = step_features_df["userID"] + year_int + semester_int
+
+    return prob_features_df, step_features_df
+
+
+def get_problems(substep_info_df: pd.DataFrame) -> List[str]:
+    """
+    Get the problems for the semester.
+
+    Args:
+        substep_info_df: The substep info dataframe.
+
+    Returns:
+        The problems for the semester.
+    """
+    problems = substep_info_df["problem"].unique()
+    problems = [
+        problem_id
+        for problem_id in problems
+        if (
+            problem_id[-1] != "w"
+            and "ex222" not in problem_id
+            and "ex144" not in problem_id
+        )
+    ]  # exclude word problems and ex222 and ex144 which won't be trained for step-level
+    return problems
+
+
+def make_data_subdirectory(subdirectory: str, semester_folder: str) -> Path:
+    """
+    Make a new subdirectory underneath the "data" root directory, if it does not exist already.
+    Then, within that subdirectory, make a new subdirectory for the semester, if it does not exist
+    already. Finally, return the path to the semester subdirectory.
+
+    Args:
+        subdirectory: The name of the subdirectory to make, if it does not exist already.
+        semester_folder: The name of the semester folder to make, if it does not exist already.
+
+    Returns:
+        The path to the semester subdirectory.
+    """
+    output_directory = path_to_project_root() / "data" / subdirectory / semester_folder
+    output_directory.mkdir(parents=True, exist_ok=True)
+    return output_directory
+
+
+def get_substep_info_df(
+    semester_folder: Path, semester_name: str, year_int: int, semester_int: int
+) -> pd.DataFrame:
+    """
+    Get the substep info dataframe.
+
+    Args:
+        semester_folder: The path to the semester folder.
+        semester_name: The name of the semester, e.g. "S21".
+        year_int: The year encoded as an integer (e.g., "23" for 2023).
+        semester_int: The semester encoded as integer (e.g., "1" for Spring, "3" for Fall).
+
+    Returns:
+        The substep info dataframe.
+    """
+    substep_info_df = pd.read_csv(
+        str(semester_folder / "PostProcessing" / "substep_info.csv"), header=0
+    )
+    substep_info_df["userID"] = substep_info_df["userID"].astype(int)
+    if substep_info_df["userID"].min() < minimum_id(semester_name):
         substep_info_df["userID"] = year_int + semester_int + substep_info_df["userID"]
+    return substep_info_df
 
-        # make the output directories for the training data
-        output_directory = (
-            path_to_project_root() / "data" / "with_delayed_rewards" / semester_name
-        )
-        output_directory.mkdir(parents=True, exist_ok=True)
 
-        problems = substep_info_df["problem"].unique()
-        problems = [
-            p
-            for p in problems
-            if (p[-1] != "w" and "ex222" not in p and "ex144" not in p)
-        ]  # Exclude all wording problems and ex222 and ex144 which won't be trained for step-level
+def convert_problem_level_format(
+    output_directory: Path,
+    semester_name: str,
+    prob_features_df: pd.DataFrame,
+    substep_info_df: pd.DataFrame,
+    grades_df: pd.DataFrame,
+) -> None:
+    """
+    Convert the problem-level data to the format required by the training scripts.
 
-        # Problem-Level Training Data with action and reward columns
-        prob_features = pd.read_csv(
-            str(semester_folder / "PostProcessing" / "features_all.csv"),
-            header=0,
-            usecols=config.data.features.basic + config.data.features.problem,
-        )
+    Args:
+        output_directory: The path to the output directory.
+        prob_features_df: The problem-level features dataframe.
+        semester_name: The name of the semester, e.g. "S21".
+        substep_info_df: The substep info dataframe.
+        grades_df: The grades dataframe.
 
-        prob_features["userID"] = prob_features["userID"] + year_int + semester_int
-        prob_features = prob_features[
-            prob_features["userID"] > minimum_id(semester_name)
-        ]
-
-        prob_lvl_feature_df = prob_features[
-            prob_features["decisionPoint"].isin(["probStart", "probEnd"])
-        ]
-
-        prob_lvl_feature_df.drop(
-            prob_lvl_feature_df[
-                (prob_lvl_feature_df["decisionPoint"] == "probEnd")
-                & (~prob_lvl_feature_df["problem"].isin(["ex252", "ex252w"]))
-            ].index,
-            inplace=True,
-        )
-        prob_lvl_feature_df["action"] = ""
-        prob_lvl_feature_df["reward"] = ""
-        action_col_location = prob_lvl_feature_df.columns.get_loc("action")
-        reward_col_location = prob_lvl_feature_df.columns.get_loc("reward")
-
-        for i in range(len(prob_lvl_feature_df)):
-            user_id = prob_lvl_feature_df.iloc[i]["userID"]
-            decision_point = prob_lvl_feature_df.iloc[i]["decisionPoint"]
-            if decision_point == "probStart":
-                problem = prob_lvl_feature_df.iloc[i]["problem"]
-                unique_actions = substep_info_df[
-                    (substep_info_df["userID"] == user_id)
-                    & (substep_info_df["problem"] == problem)
-                ]["substepMode"].unique()
-                if len(unique_actions) == 2:
-                    prob_lvl_feature_df.iat[i, action_col_location] = "step_decision"
-                else:
-                    try:
-                        prob_lvl_feature_df.iat[
-                            i, action_col_location
-                        ] = unique_actions[0]
-                    except IndexError:
-                        prob_lvl_feature_df.iat[i, action_col_location] = unique_actions
+    Returns:
+        None
+    """
+    prob_features_df = prob_features_df[
+        prob_features_df["userID"] > minimum_id(semester_name)
+    ]
+    prob_lvl_feature_df = prob_features_df[
+        prob_features_df["decisionPoint"].isin(["probStart", "probEnd"])
+    ]
+    prob_lvl_feature_df.drop(
+        prob_lvl_feature_df[
+            (prob_lvl_feature_df["decisionPoint"] == "probEnd")
+            & (~prob_lvl_feature_df["problem"].isin(["ex252", "ex252w"]))
+        ].index,
+        inplace=True,
+    )
+    prob_lvl_feature_df["action"] = ""
+    prob_lvl_feature_df["reward"] = ""
+    action_col_location = prob_lvl_feature_df.columns.get_loc("action")
+    reward_col_location = prob_lvl_feature_df.columns.get_loc("reward")
+    for i in range(len(prob_lvl_feature_df)):
+        user_id = prob_lvl_feature_df.iloc[i]["userID"]
+        decision_point = prob_lvl_feature_df.iloc[i]["decisionPoint"]
+        if decision_point == "probStart":
+            problem = prob_lvl_feature_df.iloc[i]["problem"]
+            unique_actions = substep_info_df[
+                (substep_info_df["userID"] == user_id)
+                & (substep_info_df["problem"] == problem)
+            ]["substepMode"].unique()
+            if len(unique_actions) == 2:
+                prob_lvl_feature_df.iat[i, action_col_location] = "step_decision"
             else:
-                if len(grades_df[grades_df["userID"] == user_id]["nlg"].unique()) == 0:
-                    continue  # the result is empty list, skip this user
-                nlg = grades_df[grades_df["userID"] == user_id]["nlg"].unique()[0]
-                prob_lvl_feature_df.iat[i, reward_col_location] = nlg
+                try:
+                    prob_lvl_feature_df.iat[i, action_col_location] = unique_actions[0]
+                except IndexError:
+                    prob_lvl_feature_df.iat[i, action_col_location] = unique_actions
+        else:
+            if len(grades_df[grades_df["userID"] == user_id]["nlg"].unique()) == 0:
+                continue  # the result is empty list, skip this user
+            nlg = grades_df[grades_df["userID"] == user_id]["nlg"].unique()[0]
+            prob_lvl_feature_df.iat[i, reward_col_location] = nlg
+    # save the problem-level training data
+    print(f"Saving problem-level training data for the {semester_name} semester...")
+    prob_lvl_feature_df.to_csv(output_directory / "problem_level.csv", index=False)
 
-        # save the problem-level training data
-        print(f"Saving problem-level training data for the {semester_name} semester...")
-        prob_lvl_feature_df.to_csv(output_directory / "problem_level.csv", index=False)
 
-        # Step-Level Training Data with action column
-        step_features = pd.read_csv(
-            str(semester_folder / "PostProcessing" / "features_all.csv"),
-            header=0,
-            usecols=config.data.features.basic + config.data.features.step,
+def convert_step_level_format(
+    output_directory: Path,
+    semester_name: str,
+    step_features_df: pd.DataFrame,
+    substep_info_df: pd.DataFrame,
+    problems: List[str],
+) -> None:
+    """
+    Converts the step-level data into the format that can be used for training the step-level
+    InferNet models.
+
+    Args:
+        output_directory: The path to the output directory.
+        semester_name: The name of the semester.
+        step_features_df: The step-level features dataframe.
+        substep_info_df: The substep info dataframe.
+        problems: The list of problems.
+
+    Returns:
+        None
+    """
+    for problem in problems:
+        step_lvl_feature_df = step_features_df[
+            (step_features_df["decisionPoint"].isin(["stepStart", "probEnd"]))
+            & (step_features_df["problem"].isin([problem, problem + "w"]))
+        ]
+        step_lvl_feature_df["action"] = ""
+        step_lvl_feature_df["reward"] = ""
+        action_col_location = step_lvl_feature_df.columns.get_loc("action")
+        step_lvl_substep_df = substep_info_df[
+            substep_info_df["problem"].isin([problem, problem + "w"])
+        ]
+
+        # make the user IDs consistent with each other
+        year_int, semester_int = make_year_and_semester_int(semester_name)
+
+        if any(step_lvl_feature_df.userID < 1000):
+            step_lvl_feature_df.userID += year_int + semester_int
+        if any(step_lvl_substep_df.userID < 1000):
+            step_lvl_substep_df.userID += year_int + semester_int
+
+        # select the minimal set of user IDs to make the data agree with each other
+        user_ids = set(step_lvl_feature_df.userID.unique()).intersection(
+            step_lvl_substep_df.userID.unique()
         )
+        # user IDs below 100 are considered test users, remove them
+        user_ids = [
+            user_id for user_id in user_ids if user_id > minimum_id(semester_name)
+        ]
+        user_count = len(user_ids)
 
-        step_features["userID"] = step_features["userID"] + year_int + semester_int
+        # make them consistent with each other
+        step_lvl_feature_df = step_lvl_feature_df[
+            step_lvl_feature_df.userID.isin(user_ids)
+        ]
+        step_lvl_substep_df = step_lvl_substep_df[
+            step_lvl_substep_df.userID.isin(user_ids)
+        ]
 
-        for problem in problems:
-            step_lvl_feature_df = step_features[
-                (step_features["decisionPoint"].isin(["stepStart", "probEnd"]))
-                & (step_features["problem"].isin([problem, problem + "w"]))
-            ]
-            step_lvl_feature_df["action"] = ""
-            step_lvl_feature_df["reward"] = ""
-            action_col_location = step_lvl_feature_df.columns.get_loc("action")
-            step_lvl_substep_df = substep_info_df[
-                substep_info_df["problem"].isin([problem, problem + "w"])
-            ]
+        # Feature Frame has an extra "probEnd" per problem per user.
+        # Since we are at the current problem, it has an additional #NumberofUser rows
+        if len(step_lvl_feature_df) != len(step_lvl_substep_df) + user_count:
+            print("feature_all and substep_info length mismatch at step-level")
+            continue
+            # sys.exit(1)
 
-            # make the user IDs consistent with each other
-            year_int, semester_int = make_year_and_semester_int(semester_name)
+        sub_step_counter = 0
+        for i in range(len(step_lvl_feature_df)):
+            decision_point = step_lvl_feature_df.iloc[i]["decisionPoint"]
+            if decision_point != "stepStart":
+                continue
+            user_id_feature = step_lvl_feature_df.iloc[i]["userID"]
+            user_id_substep = step_lvl_substep_df.iloc[sub_step_counter]["userID"]
 
-            if any(step_lvl_feature_df.userID < 1000):
-                step_lvl_feature_df.userID += year_int + semester_int
-            if any(step_lvl_substep_df.userID < 1000):
-                step_lvl_substep_df.userID += year_int + semester_int
-
-            # select the minimal set of user IDs to make the data agree with each other
-            user_ids = set(step_lvl_feature_df.userID.unique()).intersection(
-                step_lvl_substep_df.userID.unique()
-            )
-            # user IDs below 100 are considered test users, remove them
-            user_ids = [
-                user_id for user_id in user_ids if user_id > minimum_id(semester_name)
-            ]
-            user_count = len(user_ids)
-
-            # make them consistent with each other
-            step_lvl_feature_df = step_lvl_feature_df[
-                step_lvl_feature_df.userID.isin(user_ids)
-            ]
-            step_lvl_substep_df = step_lvl_substep_df[
-                step_lvl_substep_df.userID.isin(user_ids)
-            ]
-
-            # Feature Frame has an extra "probEnd" per problem per user.
-            # Since we are at the current problem, it has an additional #NumberofUser rows
-            if len(step_lvl_feature_df) != len(step_lvl_substep_df) + user_count:
-                print("feature_all and substep_info length mismatch at step-level")
+            if user_id_feature != user_id_substep:
+                print(
+                    "UserID mismatch between feature_all and substep_info at step-level: "
+                    "Feature -> "
+                    + str(user_id_feature)
+                    + ", subStep -> "
+                    + str(user_id_substep)
+                )
                 continue
                 # sys.exit(1)
 
-            sub_step_counter = 0
-            for i in range(len(step_lvl_feature_df)):
-                decision_point = step_lvl_feature_df.iloc[i]["decisionPoint"]
-                if decision_point != "stepStart":
-                    continue
-                user_id_feature = step_lvl_feature_df.iloc[i]["userID"]
-                user_id_substep = step_lvl_substep_df.iloc[sub_step_counter]["userID"]
+            step_lvl_feature_df.iat[i, action_col_location] = step_lvl_substep_df.iloc[
+                sub_step_counter
+            ]["substepMode"]
+            sub_step_counter += 1
 
-                if user_id_feature != user_id_substep:
-                    print(
-                        "UserID mismatch between feature_all and substep_info at step-level: "
-                        "Feature -> " + str(user_id_feature) +
-                        ", subStep -> " + str(user_id_substep)
-                    )
-                    continue
-                    # sys.exit(1)
-
-                step_lvl_feature_df.iat[
-                    i, action_col_location
-                ] = step_lvl_substep_df.iloc[sub_step_counter]["substepMode"]
-                sub_step_counter += 1
-
-            # save the step-level training data for this current problem
-            print(
-                f"Saving {problem} step-level training data for the {semester_name} semester..."
-            )
-            step_lvl_feature_df.to_csv(
-                output_directory / f"{problem}(w).csv", index=False
-            )
+        # save the step-level training data for this current problem
+        print(
+            f"Saving {problem} step-level training data for the {semester_name} semester..."
+        )
+        step_lvl_feature_df.to_csv(output_directory / f"{problem}(w).csv", index=False)
 
 
 if __name__ == "__main__":
-    iterate_over_semester_data()
+    iterate_over_semester_data(function_to_perform=convert_data_format)
