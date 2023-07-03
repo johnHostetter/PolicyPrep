@@ -50,11 +50,16 @@ def minimum_id(semester: str) -> int:
 
 
 def iterate_over_semester_data(
-    function_to_perform: Callable[[Path, str, int, int, Config], None]
+    subdirectory: str,
+    function_to_perform: Callable[[Path, str, Config], None],
 ) -> None:
     """
     Iterate over the different semesters of training data and generate the training data with action
     and reward columns.
+
+    Args:
+        subdirectory: The subdirectory of the data folder to iterate over.
+        function_to_perform: The function to perform on each semester folder.
 
     Returns:
         None
@@ -65,9 +70,9 @@ def iterate_over_semester_data(
 
     # iterate over the different semesters of training data
 
-    semester_folder_path_generator = (path_to_project_root() / "data" / "raw").glob(
-        "* - *"
-    )
+    semester_folder_path_generator = (
+        path_to_project_root() / "data" / subdirectory
+    ).glob("* - *")
     for semester_folder in semester_folder_path_generator:
         if not semester_folder.is_dir():
             print(f"Skipping {semester_folder.name} (not a directory)...")
@@ -81,12 +86,8 @@ def iterate_over_semester_data(
         (_, semester_name) = semester_folder.name.split(" - ")
         print(f"Processing data for the {semester_name} semester...")
 
-        year_int, semester_int = make_year_and_semester_int(semester_name)
-
         try:
-            function_to_perform(
-                semester_folder, semester_name, year_int, semester_int, config
-            )
+            function_to_perform(semester_folder, semester_name, config)
         except FileNotFoundError as file_not_found_error:
             print(
                 f"Skipping {semester_folder.name} (no {file_not_found_error.filename} file "
@@ -98,8 +99,6 @@ def iterate_over_semester_data(
 def convert_data_format(
     semester_folder: Path,
     semester_name: str,
-    year_int: int,
-    semester_int: int,
     config: Config,
 ) -> None:
     """
@@ -108,13 +107,13 @@ def convert_data_format(
     Args:
         semester_folder: The path to the folder containing the semester data.
         semester_name: The name of the semester, e.g. "S21".
-        year_int: The year encoded as an integer (e.g., "23" for 2023).
-        semester_int: The semester encoded as integer (e.g., "1" for Spring, "3" for Fall).
         config: The configuration settings.
 
     Returns:
         None
     """
+    year_int, semester_int = make_year_and_semester_int(semester_name)
+
     # load the grades data
     try:
         grades_df = pd.read_csv(
@@ -126,16 +125,30 @@ def convert_data_format(
         sys.exit(1)
 
     # get the substep info dataframe
-    substep_info_df = get_substep_info_df(semester_folder, semester_name, year_int, semester_int)
+    substep_info_df = get_substep_info_df(
+        semester_folder, semester_name, year_int, semester_int
+    )
     # make the output directories for the training data
     output_directory = make_data_subdirectory(
         "with_delayed_rewards", semester_folder.name
     )
     # get the problems for the semester
     problems = get_problems(substep_info_df)
-    # get the problem-level and step-level features dataframes
-    prob_features_df, step_features_df = get_problem_and_step_level_features_df(
-        semester_folder, semester_name, year_int, semester_int, config
+    # need to prepare problem-level training data with action and reward columns
+    prob_features_df = get_features_dataframe(
+        semester_folder,
+        semester_name,
+        year_int,
+        semester_int,
+        columns=config.data.features.basic + config.data.features.problem,
+    )
+    # need to prepare step-level training data with action column
+    step_features_df = get_features_dataframe(
+        semester_folder,
+        semester_name,
+        year_int,
+        semester_int,
+        columns=config.data.features.basic + config.data.features.step,
     )
     # convert the data to the format required by the training scripts
     convert_problem_level_format(
@@ -154,47 +167,48 @@ def convert_data_format(
     )
 
 
-def get_problem_and_step_level_features_df(
-    semester_folder: Path, semester_name: str, year_int: int, semester_int: int, config: Config
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def get_features_dataframe(
+    semester_folder: Path,
+    semester_name: str,
+    year_int: int,
+    semester_int: int,
+    columns: List[str],
+) -> pd.DataFrame:
     """
-    Get the problem-level and step-level features dataframes.
+    Get the problem-level (or step-level) features dataframes, which are used to generate the
+    training data. The problem-level features dataframe contains the features for each problem
+    (e.g., the number of hints requested, the number of attempts, etc.). The step-level features
+    dataframe contains the features for each step (e.g., the number of hints requested, the number
+    of attempts, etc.). The features dataframe generated depends on what columns are passed in. The
+    columns should be a subset of the columns in the features_all.csv file.
 
     Args:
         semester_folder: The path to the semester folder.
         semester_name: The name of the semester, e.g. "S21".
         year_int: The year encoded as an integer (e.g., "23" for 2023).
         semester_int: The semester encoded as integer (e.g., "1" for Spring, "3" for Fall).
-        config: The configuration settings.
+        columns: The columns to include in the dataframes. The columns should be a subset of the
+            columns in the features_all.csv file.
 
     Returns:
         The problem-level and step-level features dataframes.
     """
     # need to prepare problem-level training data with action and reward columns
-    prob_features_df = pd.read_csv(
+    feature_df = pd.read_csv(
         str(semester_folder / "PostProcessing" / "features_all.csv"),
         header=0,
-        usecols=config.data.features.basic + config.data.features.problem,
-    )
-    # need to prepare step-level training data with action column
-    step_features_df = pd.read_csv(
-        str(semester_folder / "PostProcessing" / "features_all.csv"),
-        header=0,
-        usecols=config.data.features.basic + config.data.features.step,
+        usecols=columns,
     )
 
     # update the user IDs to be unique across all semesters
-    if prob_features_df["userID"].dtype == "object":
-        prob_features_df["userID"] = prob_features_df["userID"].astype("int64")
-    if step_features_df["userID"].dtype == "object":
-        step_features_df["userID"] = step_features_df["userID"].astype("int64")
+    if feature_df["userID"].dtype == "object":
+        feature_df["userID"] = feature_df["userID"].astype("int64")
+    # if the minimum user ID is less than the minimum user ID for the semester, then add the
+    # year_int and semester_int to the user IDs
+    if feature_df["userID"].min() < minimum_id(semester_name):
+        feature_df["userID"] = feature_df["userID"] + year_int + semester_int
 
-    if prob_features_df["userID"].min() < minimum_id(semester_name):
-        prob_features_df["userID"] = prob_features_df["userID"] + year_int + semester_int
-    if step_features_df["userID"].min() < minimum_id(semester_name):
-        step_features_df["userID"] = step_features_df["userID"] + year_int + semester_int
-
-    return prob_features_df, step_features_df
+    return feature_df
 
 
 def get_problems(substep_info_df: pd.DataFrame) -> List[str]:
@@ -322,7 +336,7 @@ def convert_problem_level_format(
             prob_lvl_feature_df.iat[i, reward_col_location] = nlg
     # save the problem-level training data
     print(f"Saving problem-level training data for the {semester_name} semester...")
-    prob_lvl_feature_df.to_csv(output_directory / "problem_level.csv", index=False)
+    prob_lvl_feature_df.to_csv(output_directory / "problem.csv", index=False)
 
 
 def convert_step_level_format(
@@ -358,14 +372,6 @@ def convert_step_level_format(
             substep_info_df["problem"].isin([problem, problem + "w"])
         ]
 
-        # make the user IDs consistent with each other
-        year_int, semester_int = make_year_and_semester_int(semester_name)
-
-        if any(step_lvl_feature_df.userID < 1000):
-            step_lvl_feature_df.userID += year_int + semester_int
-        if any(step_lvl_substep_df.userID < 1000):
-            step_lvl_substep_df.userID += year_int + semester_int
-
         # select the minimal set of user IDs to make the data agree with each other
         user_ids = set(step_lvl_feature_df.userID.unique()).intersection(
             step_lvl_substep_df.userID.unique()
@@ -374,7 +380,6 @@ def convert_step_level_format(
         user_ids = [
             user_id for user_id in user_ids if user_id > minimum_id(semester_name)
         ]
-        user_count = len(user_ids)
 
         # make them consistent with each other
         step_lvl_feature_df = step_lvl_feature_df[
@@ -386,7 +391,7 @@ def convert_step_level_format(
 
         # Feature Frame has an extra "probEnd" per problem per user.
         # Since we are at the current problem, it has an additional #NumberofUser rows
-        if len(step_lvl_feature_df) != len(step_lvl_substep_df) + user_count:
+        if len(step_lvl_feature_df) != len(step_lvl_substep_df) + len(user_ids):
             print("feature_all and substep_info length mismatch at step-level")
             continue
             # sys.exit(1)
@@ -423,4 +428,6 @@ def convert_step_level_format(
 
 
 if __name__ == "__main__":
-    iterate_over_semester_data(function_to_perform=convert_data_format)
+    iterate_over_semester_data(
+        subdirectory="raw", function_to_perform=convert_data_format
+    )
