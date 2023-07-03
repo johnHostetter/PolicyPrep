@@ -205,7 +205,7 @@ def get_features_dataframe(
         feature_df["userID"] = feature_df["userID"].astype("int64")
     # if the minimum user ID is less than the minimum user ID for the semester, then add the
     # year_int and semester_int to the user IDs
-    if feature_df["userID"].min() < minimum_id(semester_name):
+    if feature_df["userID"].min() < year_int + semester_int:
         feature_df["userID"] = feature_df["userID"] + year_int + semester_int
 
     return feature_df
@@ -271,7 +271,7 @@ def get_substep_info_df(
         str(semester_folder / "PostProcessing" / "substep_info.csv"), header=0
     )
     substep_info_df["userID"] = substep_info_df["userID"].astype(int)
-    if substep_info_df["userID"].min() < minimum_id(semester_name):
+    if substep_info_df["userID"].min() < year_int + semester_int:
         substep_info_df["userID"] = year_int + semester_int + substep_info_df["userID"]
     return substep_info_df
 
@@ -297,7 +297,10 @@ def convert_problem_level_format(
         None
     """
     prob_features_df = prob_features_df[
-        prob_features_df["userID"] > minimum_id(semester_name)
+        prob_features_df["userID"] >= minimum_id(semester_name)
+    ]
+    substep_info_df = substep_info_df[
+        substep_info_df["userID"] >= minimum_id(semester_name)
     ]
     prob_lvl_feature_df = prob_features_df[
         prob_features_df["decisionPoint"].isin(["probStart", "probEnd"])
@@ -378,7 +381,7 @@ def convert_step_level_format(
         )
         # user IDs below 100 are considered test users, remove them
         user_ids = [
-            user_id for user_id in user_ids if user_id > minimum_id(semester_name)
+            user_id for user_id in user_ids if user_id >= minimum_id(semester_name)
         ]
 
         # make them consistent with each other

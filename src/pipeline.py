@@ -23,3 +23,5 @@ if __name__ == "__main__":
 
     # aggregate the data into a single file
     aggregate_data_for_inferring_rewards()
+
+    # train the InferNet models

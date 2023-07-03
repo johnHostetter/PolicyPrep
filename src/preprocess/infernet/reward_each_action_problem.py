@@ -11,17 +11,15 @@ random.seed(7)
 np.random.seed(7)
 
 
-
-
 def main(df, action):
-    tf.keras.backend.set_floatx('float64')
+    tf.keras.backend.set_floatx("float64")
 
     if action == 0:
-        df['action'] = 'problem'
+        df["action"] = "problem"
     elif action == 1:
-        df['action'] = 'example'
+        df["action"] = "example"
     elif action == 2:
-        df['action'] = 'step_decision'
+        df["action"] = "step_decision"
 
     max_len = 12
     num_state_features = 130
@@ -29,29 +27,33 @@ def main(df, action):
 
     def my_loss(y_true, y_pred):
         return K.mean(K.square(K.sum(y_pred, axis=1) - y_true), axis=-1)
-    infer_reward_model_path = 'model/model_features_all_prob_action_immediate_reward_1000000.h5'
-    model = load_model(infer_reward_model_path, custom_objects={'my_loss': my_loss})
 
-    userIDs = df['userID'].unique()
+    infer_reward_model_path = (
+        "model/model_features_all_prob_action_immediate_reward_1000000.h5"
+    )
+    model = load_model(infer_reward_model_path, custom_objects={"my_loss": my_loss})
+
+    userIDs = df["userID"].unique()
 
     # Train Infer Net.
     infer_buffer = []
     for user in userIDs:
-        data_st = df[df['userID'] == user]
+        data_st = df[df["userID"] == user]
         feats = data_st.iloc[:, 14:]
         non_feats = data_st.iloc[:, :14]
-        actions = data_st['action'].tolist()[:]
-        actions_ps = np.array([1.0 if x == 'problem' else 0.0 for x in actions])
-        actions_we = np.array([1.0 if x == 'example' else 0.0 for x in actions])
-        actions_fwe = np.array([1.0 if x != 'problem' and x != 'example' else 0.0 for x in actions])
-        feats['action_ps'] = actions_ps
-        feats['action_we'] = actions_we
-        feats['action_fwe'] = actions_fwe
-        rewards = data_st['reward'].tolist()
+        actions = data_st["action"].tolist()[:]
+        actions_ps = np.array([1.0 if x == "problem" else 0.0 for x in actions])
+        actions_we = np.array([1.0 if x == "example" else 0.0 for x in actions])
+        actions_fwe = np.array(
+            [1.0 if x != "problem" and x != "example" else 0.0 for x in actions]
+        )
+        feats["action_ps"] = actions_ps
+        feats["action_we"] = actions_we
+        feats["action_fwe"] = actions_fwe
+        rewards = data_st["reward"].tolist()
         imm_rews = rewards[:-1]
         feats_np = feats.values
         infer_buffer.append((feats_np, non_feats, imm_rews, rewards[-1], len(rewards)))
-
 
     # Infer the rewards for the data and save the data.
     result = []
@@ -69,21 +71,28 @@ def main(df, action):
 
     result = np.array(result)
     if action == -1:
-        infer_str = 'inferred_rew'
+        infer_str = "inferred_rew"
     else:
-        infer_str = 'inferred_rew_aciton{}'.format(action)
-    result_df = pd.DataFrame(result, columns=df.columns.tolist() + ['action_ps', 'action_we', 'action_fwe', infer_str])
-    print('done action{}'.format(action))
+        infer_str = "inferred_rew_action{}".format(action)
+    result_df = pd.DataFrame(
+        result,
+        columns=df.columns.tolist()
+        + ["action_ps", "action_we", "action_fwe", infer_str],
+    )
+    print("done action{}".format(action))
     return result_df
 
 
-if __name__ == '__main__':
-    df = pd.read_csv('results/nn_inferred_features_all_prob_action_immediate_reward_1000000.csv', header=0)
-    del df['inferred_rew']
-    del df['action_ps']
-    del df['action_we']
-    del df['action_fwe']
-    actions = df['action'].copy()
+if __name__ == "__main__":
+    df = pd.read_csv(
+        "results/nn_inferred_features_all_prob_action_immediate_reward_1000000.csv",
+        header=0,
+    )
+    del df["inferred_rew"]
+    del df["action_ps"]
+    del df["action_we"]
+    del df["action_fwe"]
+    actions = df["action"].copy()
     # actions_ps = np.array([1.0 if x == 'problem' else 0.0 for x in actions])
     # actions_we = np.array([1.0 if x == 'example' else 0.0 for x in actions])
     # actions_fwe = np.array([1.0 if x != 'problem' and x != 'example' else 0.0 for x in actions])
@@ -102,37 +111,13 @@ if __name__ == '__main__':
         infer = main(df, action)
         lst.append(infer)
 
-    res['inferred_rew_aciton_ps'] = lst[0]['inferred_rew_aciton0']
-    res['inferred_rew_aciton_we'] = lst[1]['inferred_rew_aciton1']
-    res['inferred_rew_aciton_fwe'] = lst[2]['inferred_rew_aciton2']
+    res["inferred_rew_action_ps"] = lst[0]["inferred_rew_action0"]
+    res["inferred_rew_action_we"] = lst[1]["inferred_rew_action1"]
+    res["inferred_rew_action_fwe"] = lst[2]["inferred_rew_action2"]
 
-    df['action'] = actions
+    df["action"] = actions
 
-    res.to_csv('results/nn_inferred_features_all_prob_action_immediate_reward_all_action.csv', index=False)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    res.to_csv(
+        "results/nn_inferred_features_all_prob_action_immediate_reward_all_action.csv",
+        index=False,
+    )

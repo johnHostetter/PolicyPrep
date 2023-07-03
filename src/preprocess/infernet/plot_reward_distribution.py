@@ -7,27 +7,28 @@ import matplotlib.pyplot as plt
 
 
 def read_data(file_name):
-    data_path = './training_data_nn/{}.csv'.format(file_name)
+    data_path = "./training_data_nn/{}.csv".format(file_name)
     data = pd.read_csv(data_path, header=0)
-    data = data[data['userID'] > 161000]
+    data = data[data["userID"] > 161000]
     return data
 
 
-
-
 def main():
-    data = pd.read_csv('results/nn_inferred_features_all_prob_action_immediate_reward_1000000.csv', header=0)
+    data = pd.read_csv(
+        "results/nn_inferred_features_all_prob_action_immediate_reward_1000000.csv",
+        header=0,
+    )
 
-    data = data[['action', 'inferred_rew']].values
+    data = data[["action", "inferred_rew"]].values
 
     ps = []
     we = []
     fwe = []
 
     for action, reward in data:
-        if action == 'problem':
+        if action == "problem":
             ps.append(reward)
-        elif action == 'example':
+        elif action == "example":
             we.append(reward)
         else:
             fwe.append(reward)
@@ -36,7 +37,7 @@ def main():
     print(np.mean(we))
     print(np.mean(fwe))
 
-    kwargs = dict(hist_kws={'alpha': .6}, kde_kws={'linewidth': 2})
+    kwargs = dict(hist_kws={"alpha": 0.6}, kde_kws={"linewidth": 2})
 
     plt.figure(figsize=(10, 7), dpi=80)
     sns.distplot(ps, color="dodgerblue", label="ps", **kwargs)
@@ -46,10 +47,8 @@ def main():
     plt.legend()
     plt.savefig("20f_mac.png")
 
+    print("done")
 
 
-    print('done')
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
