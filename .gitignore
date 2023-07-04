@@ -1,3 +1,11 @@
+# Pyrenees Pipeline Project - .gitignore
+data/
+figures/
+models/
+
+# PyCharm files
+.idea
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
