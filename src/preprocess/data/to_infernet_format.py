@@ -169,7 +169,7 @@ def convert_data_format(
 
 def get_features_dataframe(
     semester_folder: Path,
-    semester_name: str,
+    semester_name: str,  # TODO: remove this parameter
     year_int: int,
     semester_int: int,
     columns: List[str],

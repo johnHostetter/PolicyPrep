@@ -45,17 +45,13 @@ def train_infer_net(problem_id: str) -> None:
     is_problem_level = "problem" in problem_id
 
     tf.keras.backend.set_floatx("float64")
-    original_data = read_data(problem_id)
+    original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
     user_ids = original_data["userID"].unique()
     max_len = calc_max_episode_length(original_data, user_ids, config)
 
-    num_state_features = len(config.data.features.problem)
-    num_actions = len(config.training.actions.problem)
-    num_state_and_actions = num_state_features + num_actions
-    print(problem_id)
-    print(f"Max episode length is {max_len}")
-
     if is_problem_level:
+        num_state_features = len(config.data.features.problem)
+        num_actions = len(config.training.actions.problem)
         normalized_data = normalize_data(
             original_data, problem_id, columns_to_normalize=config.data.features.problem
         )
@@ -67,6 +63,8 @@ def train_infer_net(problem_id: str) -> None:
             max_len=None,
         )
     else:
+        num_state_features = len(config.data.features.step)
+        num_actions = len(config.training.actions.step)
         normalized_data = normalize_data(
             original_data, problem_id, columns_to_normalize=config.data.features.step
         )
@@ -77,6 +75,10 @@ def train_infer_net(problem_id: str) -> None:
             is_problem_level=is_problem_level,
             max_len=max_len,
         )
+
+    num_state_and_actions = num_state_features + num_actions
+    print(problem_id)
+    print(f"Max episode length is {max_len}")
 
     # Train Infer Net.
     model = model_build(max_len, num_state_features + num_actions)
@@ -111,29 +113,38 @@ def train_infer_net(problem_id: str) -> None:
             print("Training time is", time.time() - start_time, "seconds")
             start_time = time.time()
 
-        if iteration in (5000, 10000):
+        if iteration in (1000, 10000):
             # Infer the rewards for the data and save the data.
+            if is_problem_level:
+                state_feature_columns = config.data.features.problem
+            else:
+                state_feature_columns = config.data.features.step
+
             infer_and_save_rewards(
                 problem_id,
                 iteration,
                 infer_buffer,
                 max_len,
                 model,
-                normalized_data,
+                state_feature_columns,
                 num_state_and_actions,
                 is_problem_level=is_problem_level,
             )
 
-            df = pd.DataFrame({"loss": losses})
+            loss_df = pd.DataFrame({"loss": losses})
+            # save the loss data to generate the loss plot
             path_to_figures = path_to_project_root() / "figures"
-            path_to_models = path_to_project_root() / "models"
             path_to_figures.mkdir(parents=True, exist_ok=True)
+            loss_df.to_csv(
+                path_to_figures / f"loss_{problem_id}_{iteration}.csv", index=False
+            )
+            # save the model
+            path_to_models = path_to_project_root() / "models"
             path_to_models.mkdir(parents=True, exist_ok=True)
-            df.to_csv(f"figures/loss_{problem_id}_{iteration}.csv", index=False)
-            model.save(f"models/model_{problem_id}_{iteration}.h5")
+            model.save(path_to_models / f"{problem_id}_{iteration}.h5")
 
-    print("done")
+    print(f"Done training InferNet for {problem_id}.")
 
 
 if __name__ == "__main__":
-    train_infer_net(problem_id="problem")
+    train_infer_net(problem_id="ex132(w)")

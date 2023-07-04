@@ -1,7 +1,7 @@
 """
 This file contains the common functions used in the InferNet model.
 """
-from typing import List
+from typing import List, Union
 
 import numpy as np
 import pandas as pd
@@ -12,24 +12,32 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import TimeDistributed, Dense, Dropout, LeakyReLU
 
 from YACS.yacs import Config
-from src.utils.reproducibility import path_to_project_root
+from src.utils.reproducibility import path_to_project_root, load_configuration
 
 
-def read_data(file_name: str) -> pd.DataFrame:
+def read_data(
+    file_name: str, subdirectory, selected_users: Union[None, List[str]]
+) -> pd.DataFrame:
     """
     Read the data from the csv file.
 
     Args:
         file_name: The name of the file to read.
+        subdirectory: The subdirectory where the file is located, a child of the data directory.
+        selected_users: The list of users to select. If None, then all users are selected that
+        occur after the first 161000 users. In other words, we ignore all students that were
+        using the tutor before Spring 2016.
 
     Returns:
         The data from the csv file.
     """
-    data_path = (
-        path_to_project_root() / "data" / "for_inferring_rewards" / f"{file_name}.csv"
-    )
+    if ".csv" not in file_name:
+        file_name += ".csv"
+    data_path = path_to_project_root() / "data" / subdirectory / file_name
     data = pd.read_csv(data_path, header=0)
-    return data[data["userID"] > 161000]  # ignore any user before 161000
+    if selected_users is None:
+        return data[data["userID"] > 161000]  # ignore any user before 161000
+    return data[data["userID"].isin(selected_users)]
 
 
 def model_build(max_ep_length: int, num_sas_features: int) -> Sequential:
@@ -134,7 +142,11 @@ def normalize_data(
     normalization_values_df = pd.DataFrame(
         {"feat": feats, "min_val": minimums, "max_val": maximums}
     )
-    normalization_values_df.to_csv(f"normalization_values/{file_name}.csv", index=False)
+    output_directory = path_to_project_root() / "data" / "normalization_values"
+    output_directory.mkdir(parents=True, exist_ok=True)
+    normalization_values_df.to_csv(
+        output_directory / f"{file_name}.csv", index=False
+    )
     return normalized_data
 
 
@@ -193,7 +205,7 @@ def create_buffer(
                 zeros = np.zeros((max_len - num_rows, num_cols))
                 data_frame = pd.DataFrame(zeros, columns=feats.columns)
                 imm_rews.extend([0.0 for _ in range(max_len - num_rows)])
-                feats = feats.append(data_frame, ignore_index=True)
+                feats = pd.concat([feats, data_frame], ignore_index=True)
 
         feats_np = feats.values
         infer_buffer.append(
@@ -208,7 +220,7 @@ def infer_and_save_rewards(
     infer_buffer: List[tuple],
     max_len: int,
     model: Sequential,
-    normalized_data: pd.DataFrame,
+    state_feature_columns: List[str],
     num_state_and_actions: int,
     is_problem_level: bool = True,
 ) -> None:
@@ -221,7 +233,7 @@ def infer_and_save_rewards(
         infer_buffer: The buffer.
         max_len: The maximum episode length.
         model: The InferNet model.
-        normalized_data: The normalized data.
+        state_feature_columns: The state feature columns.
         num_state_and_actions: The number of state and actions.
         is_problem_level: Whether the episode is problem-level.
 
@@ -229,6 +241,7 @@ def infer_and_save_rewards(
         None
     """
     result = []
+    config = load_configuration()
     for state_transactions in range(len(infer_buffer)):
         states_actions, non_feats, imm_rews, imm_rew_sum, length = infer_buffer[
             state_transactions
@@ -254,9 +267,10 @@ def infer_and_save_rewards(
     new_columns = actions + ["inferred_reward"]
     result_df = pd.DataFrame(
         result,
-        columns=normalized_data.columns.tolist() + new_columns,
+        columns=list(config.data.features.basic)
+        + list(state_feature_columns)
+        + new_columns,
     )
-    output_directory = path_to_project_root() / "with_inferred_rewards"
+    output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
     output_directory.mkdir(parents=True, exist_ok=True)
-
     result_df.to_csv(output_directory / f"{file_name}_{iteration}.csv", index=False)
