@@ -1,19 +1,11 @@
+"""
+This script is used to propagate the rewards from the problem level to the step level.
+"""
 from collections import defaultdict
 
 import pandas as pd
 
-PROBLEM_LIST = [
-    "exc137",
-    "ex132a",
-    "ex132",
-    "ex152a",
-    "ex152b",
-    "ex152",
-    "ex212",
-    "ex242",
-    "ex252a",
-    "ex252",
-]
+from src.utils.reproducibility import load_configuration
 
 
 def read_data(file_name, user_list):
@@ -24,9 +16,8 @@ def read_data(file_name, user_list):
 
 
 def main():
-    data_path = (
-        "./results/nn_inferred_features_all_prob_action_immediate_reward_1000000.csv"
-    )
+    config = load_configuration()
+    data_path = "./with_inferred_rewards/problem_10000.csv"
     problem_data = pd.read_csv(data_path, header=0)
 
     user_list = problem_data["userID"].unique()
@@ -35,10 +26,9 @@ def main():
     infer_rewards = problem_data.inferred_rew.values
 
     user_problem_reward = defaultdict(dict)
-    for i, user_id in enumerate(user_ids):
-        user_id = user_ids[i]
-        problem = problems[i]
-        infer_reward = infer_rewards[i]
+    for iteration, user_id in enumerate(user_ids):
+        problem = problems[iteration]
+        infer_reward = infer_rewards[iteration]
         user_problem_reward[user_id][problem] = infer_reward
 
     file_names = [
@@ -61,7 +51,7 @@ def main():
 
         user_ids = step_data["userID"].unique()
         for user in user_ids:
-            for problem in PROBLEM_LIST:
+            for problem in config.training.problems:
                 nn_inferred_reward = user_problem_reward[user][problem]
                 step_data.loc[
                     (step_data.userID == user)

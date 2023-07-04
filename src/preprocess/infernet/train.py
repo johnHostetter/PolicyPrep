@@ -17,10 +17,24 @@ from src.preprocess.infernet.common import (
     create_buffer,
     infer_and_save_rewards,
 )
-from src.utils.reproducibility import load_configuration, set_random_seed, path_to_project_root
+from src.utils.reproducibility import (
+    load_configuration,
+    set_random_seed,
+    path_to_project_root,
+)
 
 
-def train_infer_net(problem_id):
+def train_infer_net(problem_id: str) -> None:
+    """
+    Train the InferNet model for the problem level data if "problem" is in problem_id.
+    Otherwise, train the InferNet model for the step level data.
+
+    Args:
+        problem_id: A string that is either "problem" or the name of an exercise.
+
+    Returns:
+        None
+    """
     # configure tensorflow to use the CPU
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     # load the configuration file
@@ -46,14 +60,22 @@ def train_infer_net(problem_id):
             original_data, problem_id, columns_to_normalize=config.data.features.problem
         )
         infer_buffer = create_buffer(
-            normalized_data, user_ids, config, is_problem_level=is_problem_level, max_len=None
+            normalized_data,
+            user_ids,
+            config,
+            is_problem_level=is_problem_level,
+            max_len=None,
         )
     else:
         normalized_data = normalize_data(
             original_data, problem_id, columns_to_normalize=config.data.features.step
         )
         infer_buffer = create_buffer(
-            normalized_data, user_ids, config, is_problem_level=is_problem_level, max_len=max_len
+            normalized_data,
+            user_ids,
+            config,
+            is_problem_level=is_problem_level,
+            max_len=max_len,
         )
 
     # Train Infer Net.
@@ -68,13 +90,17 @@ def train_infer_net(problem_id):
         batch = random.sample(infer_buffer, config.training.data.batch_size)
         states_actions, non_feats, imm_rews, imm_rew_sum, length = list(zip(*batch))
         states_actions = np.reshape(
-            states_actions, (config.training.data.batch_size, max_len, num_state_and_actions)
+            states_actions,
+            (config.training.data.batch_size, max_len, num_state_and_actions),
         )
         imm_rew_sum = np.reshape(imm_rew_sum, (config.training.data.batch_size, 1))
 
         hist = model.fit(
-            states_actions, imm_rew_sum, epochs=1,
-            batch_size=config.training.data.batch_size, verbose=0
+            states_actions,
+            imm_rew_sum,
+            epochs=1,
+            batch_size=config.training.data.batch_size,
+            verbose=0,
         )
         loss = hist.history["loss"][0]
         losses.append(loss)
