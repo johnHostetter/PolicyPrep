@@ -2,11 +2,27 @@
 This module implements functions to ensure reproducibility of results, such as setting the random
 seed and loading configuration settings.
 """
+import random
 import pathlib
 from typing import Union
 
+import numpy as np
+import tensorflow as tf
+
 from YACS.yacs import Config
 
+
+def set_random_seed(seed: int = 0):
+    """
+    Set the random seed for all relevant libraries.
+
+    Args:
+        seed: The random seed to set.
+    """
+
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
 
 def path_to_project_root() -> pathlib.Path:
     """
