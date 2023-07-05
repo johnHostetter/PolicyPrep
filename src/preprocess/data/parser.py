@@ -80,15 +80,33 @@ def data_frame_to_d3rlpy_dataset(
         )
 
     # begin making the MDPDataset
-    observations = features_df[state_features].values
-    # the action is the decision
-    try:
-        actions = features_df["decision"].values[:, None]
-    except KeyError:  # not 'decision', but 'action'
-        actions = features_df["action"].values[:, None]
+    observations = features_df[list(state_features)].values
+    if "decision" in features_df.columns:
+        action_column = "decision"
+    elif "action" in features_df.columns:
+        action_column = "action"
+    else:
+        raise ValueError(
+            f'features_df must have either "decision" or action_column as a column, '
+            f'but got {features_df.columns}'
+        )
+    features_df[action_column] = features_df[action_column].replace(np.nan, "no-action")
+    # 0 is problem (or PSFWE), 1 is step_decision, 2 is example (WEFWE), 3 is no-action
+    # PSFWE -> problem, WEFWE -> example
+    # these values were created to show the exercise as a problem-solving (or worked example),
+    # but record the data as if it were a faded worked example (step_decision); this was done
+    # because inverse RL was not working with the data as a problem-solving (or worked example)
+    features_df['action'] = features_df['action'].replace(
+        to_replace=['problem', 'step_decision', 'example', 'PSFWE', 'WEFWE', 'no-action'],
+        value=[0, 1, 2, 0, 2, 3])
+    actions = features_df[action_column].values[:, None]
 
     # the reward is the inferred reward
-    rewards = features_df["inferred_reward"].values[:, None]
+    try:
+        rewards = features_df["inferred_reward"].values[:, None]
+    except KeyError:  # not 'inferred_reward', but 'reward'
+        # TODO: replace np.nan with the actual reward; for now, just use 0.0
+        rewards = features_df["reward"].replace(np.nan, 0.0).values[:, None]
 
     # return the MDPDataset
     return d3rlpy.dataset.MDPDataset(
