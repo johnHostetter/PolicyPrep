@@ -81,7 +81,7 @@ def main(df, action, file_name):
     if action == -1:
         infer_str = "inferred_rew"
     else:
-        infer_str = "inferred_rew_aciton{}".format(action)
+        infer_str = "inferred_rew_action{}".format(action)
 
     result_df = pd.DataFrame(
         result, columns=df.columns.tolist() + ["action_ps", "action_we", infer_str]
@@ -126,8 +126,8 @@ if __name__ == "__main__":
             infer = main(df, action, file_name)
             lst.append(infer)
 
-        res["inferred_rew_aciton_ps"] = lst[0]["inferred_rew_aciton0"]
-        res["inferred_rew_aciton_we"] = lst[1]["inferred_rew_aciton1"]
+        res["inferred_rew_action_ps"] = lst[0]["inferred_rew_action0"]
+        res["inferred_rew_action_we"] = lst[1]["inferred_rew_action1"]
 
         df["action"] = actions
 

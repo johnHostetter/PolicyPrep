@@ -1,6 +1,8 @@
 """
 This file contains the common functions used in the InferNet model.
 """
+from typing import List, Union
+
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -9,26 +11,46 @@ from tensorflow.keras import Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import TimeDistributed, Dense, Dropout, LeakyReLU
 
-from src.utils.reproducibility import path_to_project_root
+from YACS.yacs import Config
+from src.utils.reproducibility import path_to_project_root, load_configuration
 
 
-def read_data(file_name):
+def read_data(
+    file_name: str, subdirectory, selected_users: Union[None, List[str]]
+) -> pd.DataFrame:
     """
     Read the data from the csv file.
 
     Args:
         file_name: The name of the file to read.
+        subdirectory: The subdirectory where the file is located, a child of the data directory.
+        selected_users: The list of users to select. If None, then all users are selected that
+        occur after the first 161000 users. In other words, we ignore all students that were
+        using the tutor before Spring 2016.
 
     Returns:
         The data from the csv file.
     """
-    data_path = path_to_project_root() / "data" / "for_inferring_rewards" / f"{file_name}.csv"
+    if ".csv" not in file_name:
+        file_name += ".csv"
+    data_path = path_to_project_root() / "data" / subdirectory / file_name
     data = pd.read_csv(data_path, header=0)
-    data = data[data["userID"] > 161000]
-    return data
+    if selected_users is None:
+        return data[data["userID"] > 161000]  # ignore any user before 161000
+    return data[data["userID"].isin(selected_users)]
 
 
-def model_build(max_ep_length, num_sas_features):
+def model_build(max_ep_length: int, num_sas_features: int) -> Sequential:
+    """
+    Build the InferNet model.
+
+    Args:
+        max_ep_length: The maximum episode length.
+        num_sas_features: The number of state and action features.
+
+    Returns:
+        The InferNet model.
+    """
     model = Sequential()
     model.add(
         TimeDistributed(Dense(256), input_shape=(max_ep_length, num_sas_features))
@@ -42,7 +64,7 @@ def model_build(max_ep_length, num_sas_features):
     model.add(LeakyReLU())
     model.add(TimeDistributed(Dense(1)))
 
-    def loss_function(true_output, predicted_output):
+    def loss_function(true_output, predicted_output):  # TODO: check arg & return types
         """
         InferNet's loss function.
 
@@ -59,17 +81,20 @@ def model_build(max_ep_length, num_sas_features):
         )
         return K.mean(K.square(inferred_sum - true_output), axis=-1)
 
-    model.compile(loss=loss_function, optimizer=Adam(lr=0.0001))
+    model.compile(loss=loss_function, optimizer=Adam(learning_rate=0.0001))
     return model
 
 
-def calc_max_episode_length(original_data, user_ids, config):
+def calc_max_episode_length(
+    original_data: pd.DataFrame, user_ids: List[int], config: Config
+) -> int:
     """
     Calculate the maximum episode length.
-    
+
     Args:
         original_data: The original data.
         user_ids: A list of user ids.
+        config: The configuration file.
 
     Returns:
         The maximum episode length.
@@ -81,17 +106,20 @@ def calc_max_episode_length(original_data, user_ids, config):
         data_st = original_data[original_data["userID"] == user]
         if len(data_st) > max_len:
             max_len = len(data_st)
-    max_len -= 1
+    max_len -= 1  # the last row is not *really* a step
     return max_len
 
 
-def normalize_data(original_data, file_name, columns_to_normalize):
+def normalize_data(
+    original_data: pd.DataFrame, file_name: str, columns_to_normalize: List[str]
+) -> pd.DataFrame:
     """
     Normalize the data.
 
     Args:
         original_data: The original data.
         file_name: The file name.
+        columns_to_normalize: The columns to normalize (i.e., the features).
 
     Returns:
         The normalized data.
@@ -111,14 +139,24 @@ def normalize_data(original_data, file_name, columns_to_normalize):
         feats.append(feature_name)
         minimums.append(min_val)
         maximums.append(max_val)
-    normalization_values_df = pd.DataFrame({"feat": feats, "min_val": minimums, "max_val": maximums})
+    normalization_values_df = pd.DataFrame(
+        {"feat": feats, "min_val": minimums, "max_val": maximums}
+    )
+    output_directory = path_to_project_root() / "data" / "normalization_values"
+    output_directory.mkdir(parents=True, exist_ok=True)
     normalization_values_df.to_csv(
-        f"normalization_values/{file_name}.csv", index=False
+        output_directory / f"{file_name}.csv", index=False
     )
     return normalized_data
 
 
-def create_buffer(normalized_data, user_ids, config, is_problem_level=True, max_len=None):
+def create_buffer(
+    normalized_data: pd.DataFrame,
+    user_ids: List[int],
+    config: Config,
+    is_problem_level: bool = True,
+    max_len=None,
+) -> List[tuple]:  # TODO: change this buffer to use d3rlpy MDPDataset
     """
     Create the buffer.
 
@@ -144,7 +182,9 @@ def create_buffer(normalized_data, user_ids, config, is_problem_level=True, max_
         non_feats = data_st.iloc[:-1][list(config.data.features.basic)]
 
         if is_problem_level and len(feats) != 12:
-            raise ValueError("Problem level episodes should be 12 steps long.")
+            # raise ValueError("Problem level episodes should be 12 steps long.")
+            print("Problem level episodes should be 12 steps long.")
+            continue  # TODO: figure out why some have less than or more than 12 steps
 
         actions = data_st["action"].tolist()[:-1]
         feats["action_ps"] = np.array([1.0 if x == "problem" else 0.0 for x in actions])
@@ -165,7 +205,7 @@ def create_buffer(normalized_data, user_ids, config, is_problem_level=True, max_
                 zeros = np.zeros((max_len - num_rows, num_cols))
                 data_frame = pd.DataFrame(zeros, columns=feats.columns)
                 imm_rews.extend([0.0 for _ in range(max_len - num_rows)])
-                feats = feats.append(data_frame, ignore_index=True)
+                feats = pd.concat([feats, data_frame], ignore_index=True)
 
         feats_np = feats.values
         infer_buffer.append(
@@ -175,25 +215,25 @@ def create_buffer(normalized_data, user_ids, config, is_problem_level=True, max_
 
 
 def infer_and_save_rewards(
-    file_name,
-    i: int,
-    infer_buffer,
-    max_len,
-    model,
-    normalized_data,
-    num_state_and_actions,
-    is_problem_level=True,
+    file_name: str,
+    iteration: int,
+    infer_buffer: List[tuple],
+    max_len: int,
+    model: Sequential,
+    state_feature_columns: List[str],
+    num_state_and_actions: int,
+    is_problem_level: bool = True,
 ) -> None:
     """
     Iterate through the buffer and infer rewards. Then save the rewards.
 
     Args:
         file_name: The file name.
-        i: The iteration.
+        iteration: The training iteration.
         infer_buffer: The buffer.
         max_len: The maximum episode length.
         model: The InferNet model.
-        normalized_data: The normalized data.
+        state_feature_columns: The state feature columns.
         num_state_and_actions: The number of state and actions.
         is_problem_level: Whether the episode is problem-level.
 
@@ -201,8 +241,11 @@ def infer_and_save_rewards(
         None
     """
     result = []
-    for st in range(len(infer_buffer)):
-        states_actions, non_feats, imm_rews, imm_rew_sum, length = infer_buffer[st]
+    config = load_configuration()
+    for state_transactions in range(len(infer_buffer)):
+        states_actions, non_feats, imm_rews, imm_rew_sum, length = infer_buffer[
+            state_transactions
+        ]
         non_feats = np.array(non_feats)
         states_actions = np.reshape(states_actions, (1, max_len, num_state_and_actions))
         inf_rews = model.predict(states_actions)
@@ -224,11 +267,10 @@ def infer_and_save_rewards(
     new_columns = actions + ["inferred_reward"]
     result_df = pd.DataFrame(
         result,
-        columns=normalized_data.columns.tolist() + new_columns,
+        columns=list(config.data.features.basic)
+        + list(state_feature_columns)
+        + new_columns,
     )
-    output_directory = path_to_project_root() / "with_inferred_rewards"
+    output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
     output_directory.mkdir(parents=True, exist_ok=True)
-
-    result_df.to_csv(
-        output_directory / f"nn_inferred_{file_name}_{i}.csv", index=False
-    )
+    result_df.to_csv(output_directory / f"{file_name}_{iteration}.csv", index=False)

@@ -88,8 +88,14 @@ def concat_dataframes_and_save(data_frames: list, problem_id: str) -> None:
         data_frame = pd.concat(data_frames)
         print(f"Data for {problem_id} has shape {data_frame.shape}")
 
+        if (
+            "problem" in problem_id
+        ):  # problem-level data is ready to infer immediate rewards
+            subdirectory = "for_inferring_rewards"
+        else:  # exercise data is not ready to have immediate rewards inferred
+            subdirectory = "for_propagating_rewards"
         # make the output directories for the training data
-        output_directory = path_to_project_root() / "data" / "for_inferring_rewards"
+        output_directory = path_to_project_root() / "data" / subdirectory
         output_directory.mkdir(parents=True, exist_ok=True)
 
         # save the data to a .csv file

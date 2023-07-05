@@ -1,67 +1,77 @@
+"""
+This script is used to propagate the rewards from the problem level to the step level.
+"""
 from collections import defaultdict
 
 import pandas as pd
 
-PROBLEM_LIST = [
-    "exc137",
-    "ex132a",
-    "ex132",
-    "ex152a",
-    "ex152b",
-    "ex152",
-    "ex212",
-    "ex242",
-    "ex252a",
-    "ex252",
-]
+from src.preprocess.infernet.common import read_data
+from src.utils.reproducibility import load_configuration, path_to_project_root
 
 
-def read_data(file_name, user_list):
-    data_path = "./training_data/{}_immediate_reward.csv".format(file_name)
-    data = pd.read_csv(data_path, header=0)
-    data = data[data["userID"].isin(user_list)]
-    return data
-
-
-def main():
-    data_path = (
-        "./results/nn_inferred_features_all_prob_action_immediate_reward_1000000.csv"
+def propagate_problem_level_rewards_to_step_level():
+    """
+    Propagate the rewards from the problem level to the step level.
+    """
+    NUMBER_OF_PROBLEMS = (
+        12  # the number of problems that the user must solve during ITS training
     )
-    problem_data = pd.read_csv(data_path, header=0)
+    # load the configuration file
+    config = load_configuration()
+    # load the problem-level data (with inferred rewards)
+    path_to_data_with_inferred_rewards = (
+        path_to_project_root() / "data" / "with_inferred_rewards"
+    )
+    problem_data = pd.read_csv(
+        path_to_data_with_inferred_rewards / "problem_1000.csv", header=0
+    )
 
+    # get the list of users in the problem-level data
     user_list = problem_data["userID"].unique()
     user_ids = problem_data.userID.values
     problems = problem_data.problem.values
-    infer_rewards = problem_data.inferred_rew.values
+    infer_rewards = problem_data.inferred_reward.values
 
+    # create a dictionary of the form {user_id: {problem: reward}}
     user_problem_reward = defaultdict(dict)
-    for i, user_id in enumerate(user_ids):
-        user_id = user_ids[i]
-        problem = problems[i]
-        infer_reward = infer_rewards[i]
+    for iteration, user_id in enumerate(user_ids):
+        problem = problems[iteration]
+        # problem ID contains "w" if the exercise is shown as a word problem
+        if "w" in problem[-1]:  # if the last character is "w", remove it
+            problem = problem[:-1]  # remove the last character
+        infer_reward = infer_rewards[iteration]
         user_problem_reward[user_id][problem] = infer_reward
 
-    file_names = [
-        "features_all_ex132",
-        "features_all_ex132a",
-        "features_all_ex152",
-        "features_all_ex152a",
-        "features_all_ex152b",
-        "features_all_ex212",
-        "features_all_ex242",
-        "features_all_ex252",
-        "features_all_ex252a",
-        "features_all_exc137",
-    ]
+    # iterate over the different exercises of training data
+    exercise_file_path_generator = (
+        (  # ignore any problem-level data in this subdirectory
+            path_to_project_root() / "data" / "for_propagating_rewards"
+        ).glob("*(w).csv")
+    )  # find all the .csv files in the directory that end with "(w).csv"
+    for file in exercise_file_path_generator:
+        if file.is_dir():
+            print(f"Skipping {file.name} (it is a directory)...")
+            continue
 
-    for file_name in file_names:
-        # file_name = file_names[9]
-        print(file_name)
-        step_data = read_data(file_name, user_list)
+        print(
+            f"Propagating inferred immediate rewards from problem-level to {file.name}..."
+        )
+        step_data = read_data(
+            file.name, subdirectory="for_propagating_rewards", selected_users=user_list
+        )
 
         user_ids = step_data["userID"].unique()
         for user in user_ids:
-            for problem in PROBLEM_LIST:
+            if (
+                # skip users that are not in the problem-level data
+                user in config.training.skip.users
+                # skip users that have not solved all the problems
+                or len(user_problem_reward[user].keys()) != NUMBER_OF_PROBLEMS
+            ):
+                continue
+            for problem in config.training.problems:
+                if problem in config.training.skip.problems:
+                    continue  # skip the problem; it is not used for training
                 nn_inferred_reward = user_problem_reward[user][problem]
                 step_data.loc[
                     (step_data.userID == user)
@@ -71,11 +81,13 @@ def main():
                 ] = nn_inferred_reward
 
         step_data.to_csv(
-            "training_data_nn/{}_nn_immediate_reward.csv".format(file_name), index=False
+            path_to_project_root() / "data" / "for_inferring_rewards" / file.name,
+            index=False,
         )
 
-    print("done")
+    print("Problem-level rewards have been propagated to all step-level data. "
+          "Training of step-level InferNet models can now begin.")
 
 
 if __name__ == "__main__":
-    main()
+    propagate_problem_level_rewards_to_step_level()
