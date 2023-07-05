@@ -13,9 +13,6 @@ def propagate_problem_level_rewards_to_step_level():
     """
     Propagate the rewards from the problem level to the step level.
     """
-    NUMBER_OF_PROBLEMS = (
-        12  # the number of problems that the user must solve during ITS training
-    )
     # load the configuration file
     config = load_configuration()
     # load the problem-level data (with inferred rewards)
@@ -66,7 +63,7 @@ def propagate_problem_level_rewards_to_step_level():
                 # skip users that are not in the problem-level data
                 user in config.training.skip.users
                 # skip users that have not solved all the problems
-                or len(user_problem_reward[user].keys()) != NUMBER_OF_PROBLEMS
+                or len(user_problem_reward[user].keys()) != len(config.training.problems)
             ):
                 continue
             for problem in config.training.problems:

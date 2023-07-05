@@ -181,9 +181,9 @@ def create_buffer(
             feats = data_st.iloc[:-1][list(config.data.features.step)]
         non_feats = data_st.iloc[:-1][list(config.data.features.basic)]
 
-        if is_problem_level and len(feats) != 12:
+        if is_problem_level and len(feats) != len(config.training.problems):
             # raise ValueError("Problem level episodes should be 12 steps long.")
-            print("Problem level episodes should be 12 steps long.")
+            print(f"Problem level episodes should be {config.training.problems} steps long.")
             continue  # TODO: figure out why some have less than or more than 12 steps
 
         actions = data_st["action"].tolist()[:-1]

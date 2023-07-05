@@ -24,6 +24,7 @@ def set_random_seed(seed: int = 0):
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
+
 def path_to_project_root() -> pathlib.Path:
     """
     Return the path to the root of the project.

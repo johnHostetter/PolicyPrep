@@ -73,4 +73,4 @@ if __name__ == "__main__":
     # train an InferNet model for each exercise
     for problem_id in config.training.problems:
         if problem_id not in config.training.skip.problems:
-            train_infer_net(problem_id=problem_id)
+            train_infer_net(problem_id=f"{problem_id}(w)")
