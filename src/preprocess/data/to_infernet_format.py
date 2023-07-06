@@ -115,9 +115,10 @@ def convert_data_format(
     year_int, semester_int = make_year_and_semester_int(semester_name)
 
     # load the grades data
+    path_to_grades_directory = path_to_project_root() / "data" / "raw" / "Scores"
     try:
         grades_df = pd.read_csv(
-            str(path_to_project_root() / "data" / "weighted_F15_F22.csv"),
+            str(path_to_grades_directory / f"{config.data.grades.name}.csv"),
             header=0,
         )
     except FileNotFoundError:
@@ -126,7 +127,7 @@ def convert_data_format(
 
     # get the substep info dataframe
     substep_info_df = get_substep_info_df(
-        semester_folder, semester_name, year_int, semester_int
+        semester_folder, year_int, semester_int
     )
     # make the output directories for the training data
     output_directory = make_data_subdirectory(
@@ -137,7 +138,6 @@ def convert_data_format(
     # need to prepare problem-level training data with action and reward columns
     prob_features_df = get_features_dataframe(
         semester_folder,
-        semester_name,
         year_int,
         semester_int,
         columns=config.data.features.basic + config.data.features.problem,
@@ -145,7 +145,6 @@ def convert_data_format(
     # need to prepare step-level training data with action column
     step_features_df = get_features_dataframe(
         semester_folder,
-        semester_name,
         year_int,
         semester_int,
         columns=config.data.features.basic + config.data.features.step,
@@ -169,7 +168,6 @@ def convert_data_format(
 
 def get_features_dataframe(
     semester_folder: Path,
-    semester_name: str,  # TODO: remove this parameter
     year_int: int,
     semester_int: int,
     columns: List[str],
@@ -184,7 +182,6 @@ def get_features_dataframe(
 
     Args:
         semester_folder: The path to the semester folder.
-        semester_name: The name of the semester, e.g. "S21".
         year_int: The year encoded as an integer (e.g., "23" for 2023).
         semester_int: The semester encoded as integer (e.g., "1" for Spring, "3" for Fall).
         columns: The columns to include in the dataframes. The columns should be a subset of the
@@ -253,14 +250,13 @@ def make_data_subdirectory(subdirectory: str, semester_folder: str) -> Path:
 
 
 def get_substep_info_df(
-    semester_folder: Path, semester_name: str, year_int: int, semester_int: int
+    semester_folder: Path, year_int: int, semester_int: int
 ) -> pd.DataFrame:
     """
     Get the substep info dataframe.
 
     Args:
         semester_folder: The path to the semester folder.
-        semester_name: The name of the semester, e.g. "S21".
         year_int: The year encoded as an integer (e.g., "23" for 2023).
         semester_int: The semester encoded as integer (e.g., "1" for Spring, "3" for Fall).
 
@@ -312,6 +308,7 @@ def convert_problem_level_format(
         ].index,
         inplace=True,
     )
+
     prob_lvl_feature_df["action"] = ""
     prob_lvl_feature_df["reward"] = ""
     action_col_location = prob_lvl_feature_df.columns.get_loc("action")

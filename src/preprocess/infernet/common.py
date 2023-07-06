@@ -263,6 +263,6 @@ def infer_and_save_rewards(
         + list(state_feature_columns)
         + new_columns,
     )
-    output_directory = path_to_project_root() / "data" / "with_inferred_rewards" / str(iteration)
+    output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
     output_directory.mkdir(parents=True, exist_ok=True)
-    result_df.to_csv(output_directory / f"{file_name}.csv", index=False)
+    result_df.to_csv(output_directory / f"{file_name}_{iteration}.csv", index=False)

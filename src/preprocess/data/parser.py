@@ -30,7 +30,9 @@ def data_frame_to_d3rlpy_dataset(
         features_df: The features dataframe for the given problem_id.
         problem_id: The problem ID, such as "problem" or "exc137".
         decision_info_df: The decision info dataframe for the given problem_id. Defaults to None. If
-            None, then the decision info dataframe is not merged with the features dataframe.
+        None, then the decision info dataframe is not merged with the features dataframe.
+        config: The configuration file. Defaults to None. If None, then the default configuration
+        file is loaded.
 
     Returns:
         The MDPDataset for the given problem_id.
@@ -61,19 +63,8 @@ def data_frame_to_d3rlpy_dataset(
 
     if problem_id == "problem":  # problem-level
         state_features = config.data.features.problem
-        # # find the terminals (end of episodes)
-        # terminals = np.zeros(features_df.shape[0])
-        # students = (
-        #     features_df.userID.unique()
-        # )  # get the unique IDs for all the students
-        # transitions_per_user = int(features_df.shape[0] / len(students))
-        # # replace every nth entry w/ a 1 (end of episode)
-        # terminals[
-        #     range(transitions_per_user - 1, len(terminals), transitions_per_user)
-        # ] = 1
     elif problem_id != "problem":  # step-level
         state_features = config.data.features.step
-        # find the terminals (end of episodes)
     else:
         raise ValueError(
             f'problem_id must be either "problem" or the name of an exercise, but got {problem_id}'
@@ -97,7 +88,7 @@ def data_frame_to_d3rlpy_dataset(
     else:  # neither "decision" nor "action" is in the columns
         raise ValueError(
             f'features_df must have either "decision" or action_column as a column, '
-            f'but got {features_df.columns}'
+            f"but got {features_df.columns}"
         )
     # replace all the NaNs with "no-action"
     features_df[action_column] = features_df[action_column].replace(np.nan, "no-action")
@@ -106,9 +97,17 @@ def data_frame_to_d3rlpy_dataset(
     # these values were created to show the exercise as a problem-solving (or worked example),
     # but record the data as if it were a faded worked example (step_decision); this was done
     # because inverse RL was not working with the data as a problem-solving (or worked example)
-    features_df['action'] = features_df['action'].replace(
-        to_replace=['problem', 'step_decision', 'example', 'PSFWE', 'WEFWE', 'no-action'],
-        value=[0, 1, 2, 0, 2, 3])
+    features_df["action"] = features_df["action"].replace(
+        to_replace=[
+            "problem",
+            "step_decision",
+            "example",
+            "PSFWE",
+            "WEFWE",
+            "no-action",
+        ],
+        value=[0, 1, 2, 0, 2, 3],
+    )
     actions = features_df[action_column].values[:, None]
 
     # the reward is the inferred reward

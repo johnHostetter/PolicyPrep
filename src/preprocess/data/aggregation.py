@@ -118,7 +118,7 @@ def aggregate_data_for_inferring_rewards():
     # iterate over the different problems
     for problem_id in problems:
         if problem_id == "problem":
-            print(f"Aggregating data for problem-level...")
+            print("Aggregating data for problem-level...")
         else:
             print(f"Aggregating data for problem {problem_id}...")
         iterate_over_semester_data("with_delayed_rewards", problem_id)

@@ -5,6 +5,7 @@ from collections import defaultdict
 
 import pandas as pd
 
+from src.preprocess.data.selection import get_most_recent_data
 from src.preprocess.infernet.common import read_data
 from src.utils.reproducibility import load_configuration, path_to_project_root
 
@@ -15,13 +16,9 @@ def propagate_problem_level_rewards_to_step_level():
     """
     # load the configuration file
     config = load_configuration()
-    # load the problem-level data (with inferred rewards)
-    path_to_data_with_inferred_rewards = (
-        path_to_project_root() / "data" / "with_inferred_rewards"
-    )
-    problem_data = pd.read_csv(
-        path_to_data_with_inferred_rewards / "problem_1000.csv", header=0
-    )
+    # get the most recent problem-level data (with inferred rewards)
+    path_to_most_recent_data = get_most_recent_data(problem_id="problem")
+    problem_data = pd.read_csv(path_to_most_recent_data, header=0)
 
     # get the list of users in the problem-level data
     user_list = problem_data["userID"].unique()
