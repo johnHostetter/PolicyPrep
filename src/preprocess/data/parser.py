@@ -13,6 +13,7 @@ import d3rlpy
 import numpy as np
 import pandas as pd
 
+from YACS.yacs import Config
 from src.utils.reproducibility import load_configuration
 
 
@@ -20,6 +21,7 @@ def data_frame_to_d3rlpy_dataset(
     features_df: pd.DataFrame,
     problem_id: str,
     decision_info_df: Union[None, pd.DataFrame] = None,
+    config: Union[None, Config] = None,
 ) -> d3rlpy.dataset.MDPDataset:
     """
     Convert the features dataframe to a MDPDataset.
@@ -33,8 +35,10 @@ def data_frame_to_d3rlpy_dataset(
     Returns:
         The MDPDataset for the given problem_id.
     """
-    # load the configuration file
-    config = load_configuration()
+    if config is None:
+        # load the configuration file
+        config = load_configuration()
+
     # make the features dataframe have a consistent column name for the record ID (for merging)
     features_df = features_df.rename(columns={"recordID": "feature_recordID"})
     # if the decision info dataframe is not None, merge it with the features dataframe
@@ -52,44 +56,50 @@ def data_frame_to_d3rlpy_dataset(
         # first sort the features dataframe by student ID, then by time
         features_df = features_df.sort_values(by=["userID", "time_x"])
 
+    # drop the users that we should skip (e.g., the users that have invalid data)
+    features_df = features_df[~features_df["userID"].isin(config.training.skip.users)]
+
     if problem_id == "problem":  # problem-level
         state_features = config.data.features.problem
-        # find the terminals (end of episodes)
-        terminals = np.zeros(features_df.shape[0])
-        students = (
-            features_df.userID.unique()
-        )  # get the unique IDs for all the students
-        transitions_per_user = int(features_df.shape[0] / len(students))
-        # replace every nth entry w/ a 1 (end of episode)
-        terminals[
-            range(transitions_per_user - 1, len(terminals), transitions_per_user)
-        ] = 1
+        # # find the terminals (end of episodes)
+        # terminals = np.zeros(features_df.shape[0])
+        # students = (
+        #     features_df.userID.unique()
+        # )  # get the unique IDs for all the students
+        # transitions_per_user = int(features_df.shape[0] / len(students))
+        # # replace every nth entry w/ a 1 (end of episode)
+        # terminals[
+        #     range(transitions_per_user - 1, len(terminals), transitions_per_user)
+        # ] = 1
     elif problem_id != "problem":  # step-level
         state_features = config.data.features.step
         # find the terminals (end of episodes)
-        episode_lengths = features_df.groupby(by=["userID"]).size().values
-        terminals = np.zeros(features_df.shape[0])
-        idx = episode_lengths[0] - 1
-        terminals[idx] = 1
-        for episode_length in episode_lengths[1:]:
-            idx += episode_length
-            terminals[idx] = 1
     else:
         raise ValueError(
             f'problem_id must be either "problem" or the name of an exercise, but got {problem_id}'
         )
 
-    # begin making the MDPDataset
+    # --- begin making the MDPDataset ---
+    # find the terminals (end of episodes)
+    episode_lengths = features_df.groupby(by=["userID"]).size().values
+    terminals = np.zeros(features_df.shape[0])
+    idx = episode_lengths[0] - 1
+    terminals[idx] = 1
+    for episode_length in episode_lengths[1:]:
+        idx += episode_length
+        terminals[idx] = 1
+    # drop all the columns that are not state features
     observations = features_df[list(state_features)].values
     if "decision" in features_df.columns:
-        action_column = "decision"
+        action_column = "decision"  # the action is the decision
     elif "action" in features_df.columns:
         action_column = "action"
-    else:
+    else:  # neither "decision" nor "action" is in the columns
         raise ValueError(
             f'features_df must have either "decision" or action_column as a column, '
             f'but got {features_df.columns}'
         )
+    # replace all the NaNs with "no-action"
     features_df[action_column] = features_df[action_column].replace(np.nan, "no-action")
     # 0 is problem (or PSFWE), 1 is step_decision, 2 is example (WEFWE), 3 is no-action
     # PSFWE -> problem, WEFWE -> example
@@ -108,7 +118,6 @@ def data_frame_to_d3rlpy_dataset(
         # TODO: replace np.nan with the actual reward; for now, just use 0.0
         rewards = features_df["reward"].replace(np.nan, 0.0).values[:, None]
 
-    # return the MDPDataset
     return d3rlpy.dataset.MDPDataset(
         observations, actions, rewards, terminals, discrete_action=True
     )

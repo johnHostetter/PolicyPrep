@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
+
 from src.preprocess.infernet.common import (
     read_data,
     model_build,
@@ -46,42 +48,37 @@ def train_infer_net(problem_id: str) -> None:
 
     tf.keras.backend.set_floatx("float64")
     original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
+    mdp_dataset = data_frame_to_d3rlpy_dataset(original_data, problem_id)
     user_ids = original_data["userID"].unique()
-    max_len = calc_max_episode_length(original_data, user_ids, config)
+    max_len = calc_max_episode_length(mdp_dataset)
 
+    # select the features and actions depending on if the data is problem-level or step-level
     if is_problem_level:
-        num_state_features = len(config.data.features.problem)
-        num_actions = len(config.training.actions.problem)
-        normalized_data = normalize_data(
-            original_data, problem_id, columns_to_normalize=config.data.features.problem
-        )
-        infer_buffer = create_buffer(
-            normalized_data,
-            user_ids,
-            config,
-            is_problem_level=is_problem_level,
-            max_len=None,
-        )
+        state_features = config.data.features.problem
+        state_actions = config.training.actions.problem
     else:
-        num_state_features = len(config.data.features.step)
-        num_actions = len(config.training.actions.step)
-        normalized_data = normalize_data(
-            original_data, problem_id, columns_to_normalize=config.data.features.step
-        )
-        infer_buffer = create_buffer(
-            normalized_data,
-            user_ids,
-            config,
-            is_problem_level=is_problem_level,
-            max_len=max_len,
-        )
+        state_features = config.data.features.step
+        state_actions = config.training.actions.step
 
-    num_state_and_actions = num_state_features + num_actions
+    # normalize the data
+    normalized_data = normalize_data(
+        original_data, problem_id, columns_to_normalize=state_features
+    )
+    # create the buffer to train InferNet from
+    infer_buffer = create_buffer(
+        normalized_data,
+        user_ids,
+        config,
+        is_problem_level=is_problem_level,
+        max_len=max_len  # max_len is the max episode length; not required for problem-level data
+    )
+
+    num_state_and_actions = len(state_features) + len(state_actions)
     print(problem_id)
     print(f"Max episode length is {max_len}")
 
     # Train Infer Net.
-    model = model_build(max_len, num_state_features + num_actions)
+    model = model_build(max_len, len(state_features) + len(state_actions))
 
     # Train infer_net.
     train_steps = 10001
@@ -147,4 +144,4 @@ def train_infer_net(problem_id: str) -> None:
 
 
 if __name__ == "__main__":
-    train_infer_net(problem_id="ex132(w)")
+    train_infer_net(problem_id="problem")

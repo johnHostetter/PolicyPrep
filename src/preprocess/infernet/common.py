@@ -3,6 +3,7 @@ This file contains the common functions used in the InferNet model.
 """
 from typing import List, Union
 
+import d3rlpy.dataset
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -86,28 +87,19 @@ def model_build(max_ep_length: int, num_sas_features: int) -> Sequential:
 
 
 def calc_max_episode_length(
-    original_data: pd.DataFrame, user_ids: List[int], config: Config
+    mdp_dataset: d3rlpy.dataset.MDPDataset
 ) -> int:
     """
     Calculate the maximum episode length.
 
     Args:
-        original_data: The original data.
-        user_ids: A list of user ids.
-        config: The configuration file.
+        mdp_dataset: The Markov Decision Process (MDP) dataset.
 
     Returns:
         The maximum episode length.
     """
-    max_len = 0
-    for user in user_ids:
-        if user in config.training.skip.users:
-            continue
-        data_st = original_data[original_data["userID"] == user]
-        if len(data_st) > max_len:
-            max_len = len(data_st)
-    max_len -= 1  # the last row is not *really* a step
-    return max_len
+    # -1 because the last step is not a step (it's a terminal state that is not "real")
+    return max([len(episode) - 1 for episode in mdp_dataset.episodes])
 
 
 def normalize_data(
@@ -271,6 +263,6 @@ def infer_and_save_rewards(
         + list(state_feature_columns)
         + new_columns,
     )
-    output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
+    output_directory = path_to_project_root() / "data" / "with_inferred_rewards" / str(iteration)
     output_directory.mkdir(parents=True, exist_ok=True)
-    result_df.to_csv(output_directory / f"{file_name}_{iteration}.csv", index=False)
+    result_df.to_csv(output_directory / f"{file_name}.csv", index=False)

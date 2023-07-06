@@ -74,3 +74,6 @@ if __name__ == "__main__":
     for problem_id in config.training.problems:
         if problem_id not in config.training.skip.problems:
             train_infer_net(problem_id=f"{problem_id}(w)")
+
+    # select the training data to be used for policy induction via offline reinforcement learning
+    
