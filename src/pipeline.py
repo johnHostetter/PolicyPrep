@@ -44,7 +44,7 @@ module as a script. For example, if you want to run step (7) above for the exerc
 run the following command from the project root directory:
     python -m src.preprocess.infernet.train --problem_id problem
 """
-from multiprocessing import Process
+import multiprocessing as mp
 
 from src.preprocess.data.lookup import lookup_semester_grades_and_append_if_missing
 from src.preprocess.infernet.train import train_infer_net
@@ -84,16 +84,14 @@ if __name__ == "__main__":
     propagate_problem_level_rewards_to_step_level()
 
     # train an InferNet model for each exercise
-    processes = []
+    num_workers = mp.cpu_count() - 1
+    pool = mp.Pool(processes=num_workers)
     for problem_id in config.training.problems:
         if problem_id not in config.training.skip.problems:
-            processes.append(Process(target=train_infer_net, args=(f"{problem_id}(w)", )))
-    # start the processes
-    for process in processes:
-        process.start()
-    # wait for the processes to finish
-    for process in processes:
-        process.join()
+            pool.apply_async(train_infer_net, args=(f"{problem_id}(w)", ))
+    pool.close()
+    pool.join()
+
     print("All processes finished for training step-level InferNet models.")
 
     # select the training data to be used for policy induction via offline reinforcement learning
