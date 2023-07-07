@@ -72,25 +72,25 @@ if __name__ == "__main__":
     # load the configuration file
     config = load_configuration()
 
-    # # download the data from the Google Drive folder into a subdirectory of the
-    # # data folder called "raw"
-    # download_semester_data()
-    #
-    # iterate_over_semester_data(
-    #     subdirectory="raw",
-    #     function_to_perform=lookup_semester_grades_and_append_if_missing,
-    # )
-    #
-    # # preprocess the data to make it compatible with InferNet
-    # iterate_over_semester_data(
-    #     subdirectory="raw", function_to_perform=convert_data_format
-    # )
-    #
-    # # aggregate the data into a single file
-    # aggregate_data_for_inferring_rewards()
-    #
-    # # train the InferNet model for the problem level data
-    # train_infer_net(problem_id="problem")
+    # download the data from the Google Drive folder into a subdirectory of the
+    # data folder called "raw"
+    download_semester_data()
+
+    iterate_over_semester_data(
+        subdirectory="raw",
+        function_to_perform=lookup_semester_grades_and_append_if_missing,
+    )
+
+    # preprocess the data to make it compatible with InferNet
+    iterate_over_semester_data(
+        subdirectory="raw", function_to_perform=convert_data_format
+    )
+
+    # aggregate the data into a single file
+    aggregate_data_for_inferring_rewards()
+
+    # train the InferNet model for the problem level data
+    train_infer_net(problem_id="problem")
 
     # propagate problem-level rewards to step-level rewards
     propagate_problem_level_rewards_to_step_level()
