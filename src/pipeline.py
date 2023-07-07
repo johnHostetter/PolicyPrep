@@ -43,12 +43,12 @@ while the pipeline is running.
 If you want to run a single step of the pipeline, run the corresponding module as a script.
 For example, if you want to run step (3) above, run the following command from the project root
 directory:
-    python -m src.preprocess.data.to_infernet_format
+    python -m src/preprocess/data/to_infernet_format
 
 If you want to run a single step of the pipeline for a specific exercise, run the corresponding
 module as a script. For example, if you want to run step (7) above for the exercise "problem",
-run the following command from the project root directory:
-    python -m src.preprocess.infernet.train --problem_id problem
+run the following command from the project root directory (TODO: test or implement this):
+    python -m src/preprocess/infernet/train --problem_id problem
 """
 import multiprocessing as mp
 
