@@ -70,6 +70,8 @@ def propagate_problem_level_rewards_to_step_level():
                     user_problem_reward,
                 ),
             )
+        pool.close()
+        pool.join()
 
     print(
         "Problem-level rewards have been propagated to all step-level data. "
