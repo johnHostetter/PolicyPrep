@@ -40,7 +40,10 @@ def lookup_semester_grades_and_append_if_missing(
     Returns:
         None
     """
-    if config.data.grades.lookup_missing and semester_name in config.data.grades.append_from:
+    if (
+        config.data.grades.lookup_missing
+        and semester_name in config.data.grades.append_from
+    ):
         summary_df = pd.read_csv(semester_folder / "Summary" / "experiment_summary.csv")
         semester_grades_df = pd.read_csv(
             semester_folder / "Summary" / "user_final_grades.csv"

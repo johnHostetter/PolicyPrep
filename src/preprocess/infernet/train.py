@@ -70,7 +70,7 @@ def train_infer_net(problem_id: str) -> None:
         user_ids,
         config,
         is_problem_level=is_problem_level,
-        max_len=max_len  # max_len is the max episode length; not required for problem-level data
+        max_len=max_len,  # max_len is the max episode length; not required for problem-level data
     )
 
     num_state_and_actions = len(state_features) + len(state_actions)
@@ -81,7 +81,7 @@ def train_infer_net(problem_id: str) -> None:
     model = model_build(max_len, len(state_features) + len(state_actions))
 
     # Train infer_net.
-    train_steps = 401
+    train_steps = 51
     print("#####################")
     start_time = time.time()
     losses = []
@@ -110,7 +110,7 @@ def train_infer_net(problem_id: str) -> None:
             print("Training time is", time.time() - start_time, "seconds")
             start_time = time.time()
 
-        if iteration in (100, 200, 300, 400):
+        if iteration in (10, 20, 30, 40, 50):
             # Infer the rewards for the data and save the data.
             if is_problem_level:
                 state_feature_columns = config.data.features.problem

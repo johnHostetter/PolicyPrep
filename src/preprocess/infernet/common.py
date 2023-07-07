@@ -86,9 +86,7 @@ def model_build(max_ep_length: int, num_sas_features: int) -> Sequential:
     return model
 
 
-def calc_max_episode_length(
-    mdp_dataset: d3rlpy.dataset.MDPDataset
-) -> int:
+def calc_max_episode_length(mdp_dataset: d3rlpy.dataset.MDPDataset) -> int:
     """
     Calculate the maximum episode length.
 
@@ -136,9 +134,7 @@ def normalize_data(
     )
     output_directory = path_to_project_root() / "data" / "normalization_values"
     output_directory.mkdir(parents=True, exist_ok=True)
-    normalization_values_df.to_csv(
-        output_directory / f"{file_name}.csv", index=False
-    )
+    normalization_values_df.to_csv(output_directory / f"{file_name}.csv", index=False)
     return normalized_data
 
 
@@ -175,7 +171,9 @@ def create_buffer(
 
         if is_problem_level and len(feats) != len(config.training.problems):
             # raise ValueError("Problem level episodes should be 12 steps long.")
-            print(f"Problem level episodes should be {config.training.problems} steps long.")
+            print(
+                f"Problem level episodes should be {config.training.problems} steps long."
+            )
             continue  # TODO: figure out why some have less than or more than 12 steps
 
         actions = data_st["action"].tolist()[:-1]

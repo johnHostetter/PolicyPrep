@@ -29,10 +29,16 @@ TODO: During all the above steps, the data may be normalized and/or standardized
 TODO: be saved to a subdirectory of the data folder called "normalized" or "standardized"
 TODO: depending on whether the data was normalized or standardized.
 
-Warning: If you run this module as a script, it will run the pipeline, which will
-take a long time to complete (days or weeks). If you want to run the pipeline, run the following
-command from the project root directory:
-    python -m src.pipeline
+Warning: If you run this script within an IDE, it will run the pipeline, which will take a long time to
+complete (days or weeks). If you want to run the pipeline, run the following command from the
+project root directory:
+
+    python src/pipeline.py
+
+Further, if you want to run the pipeline, you should run it from the command line, not from an IDE. If
+you run the pipeline from an IDE, the IDE may crash due to memory issues. If you run the pipeline from
+the command line, the pipeline will run in the background, and you can continue to use your computer
+while the pipeline is running.
 
 If you want to run a single step of the pipeline, run the corresponding module as a script.
 For example, if you want to run step (3) above, run the following command from the project root
@@ -51,9 +57,16 @@ from src.preprocess.infernet.train import train_infer_net
 from src.preprocess.data.download import download_semester_data
 from src.preprocess.data.aggregation import aggregate_data_for_inferring_rewards
 from src.preprocess.data.selection import select_training_data_for_policy_induction
-from src.preprocess.data.to_infernet_format import iterate_over_semester_data, convert_data_format
-from src.preprocess.infernet.problem_to_step import propagate_problem_level_rewards_to_step_level
-from src.utils.reproducibility import load_configuration  # order matters, must be imported last
+from src.preprocess.data.to_infernet_format import (
+    iterate_over_semester_data,
+    convert_data_format,
+)
+from src.preprocess.infernet.problem_to_step import (
+    propagate_problem_level_rewards_to_step_level,
+)
+from src.utils.reproducibility import (
+    load_configuration,
+)  # order matters, must be imported last
 
 if __name__ == "__main__":
     # load the configuration file
@@ -70,8 +83,7 @@ if __name__ == "__main__":
 
     # preprocess the data to make it compatible with InferNet
     iterate_over_semester_data(
-        subdirectory="raw",
-        function_to_perform=convert_data_format
+        subdirectory="raw", function_to_perform=convert_data_format
     )
 
     # aggregate the data into a single file
@@ -85,12 +97,10 @@ if __name__ == "__main__":
 
     # train an InferNet model for each exercise
     num_workers = mp.cpu_count() - 1
-    pool = mp.Pool(processes=num_workers)
-    for problem_id in config.training.problems:
-        if problem_id not in config.training.skip.problems:
-            pool.apply_async(train_infer_net, args=(f"{problem_id}(w)", ))
-    pool.close()
-    pool.join()
+    with mp.Pool(processes=num_workers) as pool:
+        for problem_id in config.training.problems:
+            if problem_id not in config.training.skip.problems:
+                pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
 
     print("All processes finished for training step-level InferNet models.")
 

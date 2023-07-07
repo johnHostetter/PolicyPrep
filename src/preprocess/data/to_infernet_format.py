@@ -126,9 +126,7 @@ def convert_data_format(
         sys.exit(1)
 
     # get the substep info dataframe
-    substep_info_df = get_substep_info_df(
-        semester_folder, year_int, semester_int
-    )
+    substep_info_df = get_substep_info_df(semester_folder, year_int, semester_int)
     # make the output directories for the training data
     output_directory = make_data_subdirectory(
         "with_delayed_rewards", semester_folder.name
