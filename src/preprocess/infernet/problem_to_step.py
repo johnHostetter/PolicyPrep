@@ -48,28 +48,30 @@ def propagate_problem_level_rewards_to_step_level():
     )  # find all the .csv files in the directory that end with "(w).csv"
 
     num_workers = mp.cpu_count() - 1
-    with mp.Pool(processes=num_workers) as pool:
-        for file in exercise_file_path_generator:
-            if file.is_dir():
-                print(f"Skipping {file.name} (it is a directory)...")
-                continue
+    pool = mp.Pool(processes=num_workers)
+    for file in exercise_file_path_generator:
+        if file.is_dir():
+            print(f"Skipping {file.name} (it is a directory)...")
+            continue
 
-            print(
-                f"Propagating inferred immediate rewards from problem-level to {file.name}..."
-            )
-            step_data = read_data(
-                file.name, subdirectory="for_propagating_rewards", selected_users=user_list
-            )
+        print(
+            f"Propagating inferred immediate rewards from problem-level to {file.name}..."
+        )
+        step_data = read_data(
+            file.name, subdirectory="for_propagating_rewards", selected_users=user_list
+        )
 
-            pool.apply_async(
-                propagate_problem_reward_to_step_level_data,
-                args=(
-                    config,
-                    file,
-                    step_data,
-                    user_problem_reward,
-                ),
-            )
+        pool.apply_async(
+            propagate_problem_reward_to_step_level_data,
+            args=(
+                config,
+                file,
+                step_data,
+                user_problem_reward,
+            ),
+        )
+    pool.close()
+    pool.join()
 
     print(
         "Problem-level rewards have been propagated to all step-level data. "

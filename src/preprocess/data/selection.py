@@ -50,6 +50,8 @@ def select_training_data_for_policy_induction() -> None:
                     problem_id,
                 ),
             )
+        pool.close()
+        pool.join()
 
 
 def move_and_convert_data(file: Path, problem_id: str) -> None:
