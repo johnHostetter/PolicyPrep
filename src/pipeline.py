@@ -101,6 +101,7 @@ if __name__ == "__main__":
         for problem_id in config.training.problems:
             if problem_id not in config.training.skip.problems:
                 pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
+        pool.close()
         pool.join()
 
     print("All processes finished for training step-level InferNet models.")
