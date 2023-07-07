@@ -1,5 +1,5 @@
 # Pyrenees Pipeline Project - .gitignore
-data/
+/data
 figures/
 models/
 

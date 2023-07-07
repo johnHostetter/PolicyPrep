@@ -3,6 +3,7 @@ This file contains the common functions used in the InferNet model.
 """
 from typing import List, Union
 
+import d3rlpy.dataset
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -85,29 +86,18 @@ def model_build(max_ep_length: int, num_sas_features: int) -> Sequential:
     return model
 
 
-def calc_max_episode_length(
-    original_data: pd.DataFrame, user_ids: List[int], config: Config
-) -> int:
+def calc_max_episode_length(mdp_dataset: d3rlpy.dataset.MDPDataset) -> int:
     """
     Calculate the maximum episode length.
 
     Args:
-        original_data: The original data.
-        user_ids: A list of user ids.
-        config: The configuration file.
+        mdp_dataset: The Markov Decision Process (MDP) dataset.
 
     Returns:
         The maximum episode length.
     """
-    max_len = 0
-    for user in user_ids:
-        if user in config.training.skip.users:
-            continue
-        data_st = original_data[original_data["userID"] == user]
-        if len(data_st) > max_len:
-            max_len = len(data_st)
-    max_len -= 1  # the last row is not *really* a step
-    return max_len
+    # -1 because the last step is not a step (it's a terminal state that is not "real")
+    return max([len(episode) - 1 for episode in mdp_dataset.episodes])
 
 
 def normalize_data(
@@ -144,9 +134,7 @@ def normalize_data(
     )
     output_directory = path_to_project_root() / "data" / "normalization_values"
     output_directory.mkdir(parents=True, exist_ok=True)
-    normalization_values_df.to_csv(
-        output_directory / f"{file_name}.csv", index=False
-    )
+    normalization_values_df.to_csv(output_directory / f"{file_name}.csv", index=False)
     return normalized_data
 
 
@@ -181,9 +169,11 @@ def create_buffer(
             feats = data_st.iloc[:-1][list(config.data.features.step)]
         non_feats = data_st.iloc[:-1][list(config.data.features.basic)]
 
-        if is_problem_level and len(feats) != 12:
+        if is_problem_level and len(feats) != len(config.training.problems):
             # raise ValueError("Problem level episodes should be 12 steps long.")
-            print("Problem level episodes should be 12 steps long.")
+            print(
+                f"Problem level episodes should be {config.training.problems} steps long."
+            )
             continue  # TODO: figure out why some have less than or more than 12 steps
 
         actions = data_st["action"].tolist()[:-1]
