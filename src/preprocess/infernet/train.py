@@ -9,6 +9,7 @@ import multiprocessing as mp
 
 import numpy as np
 import pandas as pd
+from numba import cuda
 import tensorflow as tf
 
 from YACS.yacs import Config
@@ -171,7 +172,8 @@ def train_step_level_models(args: argparse.Namespace, config: Config) -> None:
     # temporarily limit the number of workers to the number of GPUs available
     physical_devices = tf.config.list_physical_devices("GPU")
     if len(physical_devices) > 0:
-        num_workers = len(physical_devices)
+        device = cuda.get_current_device()
+        num_workers = getattr(device, "MULTIPROCESSOR_COUNT", 1)
     else:
         num_workers = args.num_workers
     with mp.Pool(processes=num_workers) as pool:
