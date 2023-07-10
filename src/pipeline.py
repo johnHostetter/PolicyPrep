@@ -175,7 +175,10 @@ import argparse
 import multiprocessing as mp
 
 from src.preprocess.data.lookup import lookup_semester_grades_and_append_if_missing
-from src.preprocess.infernet.train import train_infer_net
+from src.preprocess.infernet.train import (
+    train_infer_net,
+    train_step_level_models,
+)
 from src.preprocess.data.download import download_semester_data
 from src.preprocess.data.aggregation import aggregate_data_for_inferring_rewards
 from src.preprocess.data.selection import select_training_data_for_policy_induction
@@ -334,14 +337,8 @@ if __name__ == "__main__":
         print(
             "(7): Training the InferNet model for each exercise (step-level) data file..."
         )
-        with mp.Pool(processes=args.num_workers) as pool:
-            for problem_id in config.training.problems:
-                print(f"Training the InferNet model for {problem_id}...")
-                if problem_id not in config.training.skip.problems:
-                    pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
-            pool.close()
-            pool.join()
-        print("All processes finished for training step-level InferNet models.")
+
+        train_step_level_models()
 
     # select the training data to be used for policy induction via offline reinforcement learning
     if args.step == 8 or (args.run_all and args.step <= 8):

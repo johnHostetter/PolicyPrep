@@ -63,7 +63,9 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
                 f"Propagating inferred immediate rewards from problem-level to {file.name}..."
             )
             step_data = read_data(
-                file.name, subdirectory="for_propagating_rewards", selected_users=user_list
+                file.name,
+                subdirectory="for_propagating_rewards",
+                selected_users=user_list,
             )
 
             pool.apply_async(
