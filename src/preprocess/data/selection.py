@@ -15,10 +15,13 @@ from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
 from src.utils.reproducibility import load_configuration, path_to_project_root
 
 
-def select_training_data_for_policy_induction() -> None:
+def select_training_data_for_policy_induction(num_workers: int = 1) -> None:
     """
     Iterate over the different semesters of training data and generate the training data with action
     and reward columns.
+
+    Args:
+        num_workers: The number of processes to use for multiprocessing.
 
     Returns:
         None
@@ -30,7 +33,6 @@ def select_training_data_for_policy_induction() -> None:
     problems = list(config.training.problems)
     problems.insert(0, "problem")
 
-    num_workers = mp.cpu_count() - 1
     with mp.Pool(processes=num_workers) as pool:
         for problem_id in problems:
             if problem_id in config.training.skip.problems:

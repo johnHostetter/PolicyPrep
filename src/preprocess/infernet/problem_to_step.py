@@ -14,9 +14,15 @@ from src.preprocess.infernet.common import read_data
 from src.utils.reproducibility import load_configuration, path_to_project_root
 
 
-def propagate_problem_level_rewards_to_step_level():
+def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
     """
     Propagate the rewards from the problem level to the step level.
+
+    Args:
+        num_workers: The number of processes to use for multiprocessing.
+
+    Returns:
+        None
     """
     # load the configuration file
     config = load_configuration()
@@ -47,7 +53,6 @@ def propagate_problem_level_rewards_to_step_level():
         ).glob("*(w).csv")
     )  # find all the .csv files in the directory that end with "(w).csv"
 
-    num_workers = mp.cpu_count() - 1
     with mp.Pool(processes=num_workers) as pool:
         for file in exercise_file_path_generator:
             if file.is_dir():
