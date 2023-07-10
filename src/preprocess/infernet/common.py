@@ -172,17 +172,34 @@ def create_buffer(
         if is_problem_level and len(feats) != len(config.training.problems):
             # raise ValueError("Problem level episodes should be 12 steps long.")
             print(
-                f"Problem level episodes should be {config.training.problems} steps long."
+                f"Issue with user {user}: Problem level episodes "
+                f"should be {len(config.training.problems)} steps long."
+                f"Skipping this user (and adding them to list of skipped users)."
             )
+            with config.unfreeze():
+                config.training.skip.users = tuple(
+                    list(config.training.skip.users) + [user]
+                )
             continue  # TODO: figure out why some have less than or more than 12 steps
 
         actions = data_st["action"].tolist()[:-1]
-        feats["action_ps"] = np.array([1.0 if x == "problem" else 0.0 for x in actions])
-        feats["action_we"] = np.array([1.0 if x == "example" else 0.0 for x in actions])
+        new_columns = {
+            "action_ps": np.array([1.0 if x == "problem" else 0.0 for x in actions]),
+            "action_we": np.array([1.0 if x == "example" else 0.0 for x in actions]),
+        }
         if is_problem_level:  # faded worked example is only for the problem-level
-            feats["action_fwe"] = np.array(
+            new_columns["action_fwe"] = np.array(
                 [1.0 if x not in ("problem", "example") else 0.0 for x in actions]
             )
+        feats = pd.concat(
+            [
+                feats,
+                pd.DataFrame(
+                    new_columns, index=feats.index, columns=list(new_columns.keys())
+                ),
+            ],
+            axis=1,
+        )
 
         rewards = data_st["reward"].tolist()
         if np.isnan(rewards[-1]):
@@ -233,9 +250,7 @@ def infer_and_save_rewards(
     result = []
     config = load_configuration()
     for state_transactions in range(len(infer_buffer)):
-        states_actions, non_feats, _, _, length = infer_buffer[
-            state_transactions
-        ]
+        states_actions, non_feats, _, _, length = infer_buffer[state_transactions]
         non_feats = np.array(non_feats)
         states_actions = np.reshape(states_actions, (1, max_len, num_state_and_actions))
         inf_rews = model.predict(states_actions)
