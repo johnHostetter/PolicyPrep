@@ -97,7 +97,7 @@ def calc_max_episode_length(mdp_dataset: d3rlpy.dataset.MDPDataset) -> int:
         The maximum episode length.
     """
     # -1 because the last step is not a step (it's a terminal state that is not "real")
-    return max([len(episode) - 1 for episode in mdp_dataset.episodes])
+    return max(len(episode) - 1 for episode in mdp_dataset.episodes)
 
 
 def normalize_data(
@@ -233,7 +233,7 @@ def infer_and_save_rewards(
     result = []
     config = load_configuration()
     for state_transactions in range(len(infer_buffer)):
-        states_actions, non_feats, imm_rews, imm_rew_sum, length = infer_buffer[
+        states_actions, non_feats, _, _, length = infer_buffer[
             state_transactions
         ]
         non_feats = np.array(non_feats)

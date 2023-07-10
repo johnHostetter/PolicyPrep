@@ -74,20 +74,18 @@ def train_infer_net(problem_id: str) -> None:
     )
 
     num_state_and_actions = len(state_features) + len(state_actions)
-    print(problem_id)
-    print(f"Max episode length is {max_len}")
+    print(f"{problem_id}: Max episode length is {max_len}")
 
     # Train Infer Net.
     model = model_build(max_len, len(state_features) + len(state_actions))
 
     # Train infer_net.
-    train_steps = 51
     print("#####################")
     start_time = time.time()
     losses = []
-    for iteration in range(train_steps):
+    for iteration in range(config.training.data.num_iterations):
         batch = random.sample(infer_buffer, config.training.data.batch_size)
-        states_actions, non_feats, imm_rews, imm_rew_sum, length = list(zip(*batch))
+        states_actions, _, _, imm_rew_sum, _ = list(zip(*batch))
         states_actions = np.reshape(
             states_actions,
             (config.training.data.batch_size, max_len, num_state_and_actions),
@@ -105,12 +103,11 @@ def train_infer_net(problem_id: str) -> None:
         losses.append(loss)
         if iteration == 0:
             print(problem_id)
-        if iteration % 1000 == 0:
-            print(f"Step {iteration}/{train_steps}, loss {loss}")
+        if iteration % config.training.data.checkpoint == 0:
+            print(f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}")
             print("Training time is", time.time() - start_time, "seconds")
             start_time = time.time()
 
-        if iteration in (10, 20, 30, 40, 50):
             # Infer the rewards for the data and save the data.
             if is_problem_level:
                 state_feature_columns = config.data.features.problem
