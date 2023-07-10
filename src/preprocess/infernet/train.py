@@ -2,13 +2,17 @@
 This file is used to train the InferNet model for the problem level data.
 """
 import os
-import random
 import time
+import random
+import argparse
+import multiprocessing as mp
 
 import numpy as np
 import pandas as pd
+from numba import cuda
 import tensorflow as tf
 
+from YACS.yacs import Config
 from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
 
 from src.preprocess.infernet.common import (
@@ -37,8 +41,22 @@ def train_infer_net(problem_id: str) -> None:
     Returns:
         None
     """
-    # configure tensorflow to use the CPU
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    # see if a GPU is available
+    physical_devices = tf.config.list_physical_devices("GPU")
+    if len(physical_devices) > 0:
+        # configure tensorflow to use the GPU
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+        # set the memory growth to true
+        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+        # print the device name
+        print(f"Running on {physical_devices[0]}")
+    else:
+        # configure tensorflow to use the CPU
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    # disable the TensorFlow output messages
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
     # load the configuration file
     config = load_configuration()
     # set the random seed
@@ -101,10 +119,10 @@ def train_infer_net(problem_id: str) -> None:
         )
         loss = hist.history["loss"][0]
         losses.append(loss)
-        if iteration == 0:
-            print(problem_id)
-        if iteration % config.training.data.checkpoint == 0:
-            print(f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}")
+        if iteration > 0 and iteration % config.training.data.checkpoint == 0:
+            print(
+                f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}"
+            )
             print("Training time is", time.time() - start_time, "seconds")
             start_time = time.time()
 
@@ -138,6 +156,34 @@ def train_infer_net(problem_id: str) -> None:
             model.save(path_to_models / f"{problem_id}_{iteration}.h5")
 
     print(f"Done training InferNet for {problem_id}.")
+
+
+def train_step_level_models(args: argparse.Namespace, config: Config) -> None:
+    """
+    Train the InferNet models for all step-level problems.
+
+    Args:
+        args: The command line arguments.
+        config: The configuration object.
+
+    Returns:
+        None
+    """
+    # temporarily limit the number of workers to the number of GPUs available
+    physical_devices = tf.config.list_physical_devices("GPU")
+    if len(physical_devices) > 0:
+        device = cuda.get_current_device()
+        num_workers = getattr(device, "MULTIPROCESSOR_COUNT", 1)
+    else:
+        num_workers = args.num_workers
+    with mp.Pool(processes=num_workers) as pool:
+        for problem_id in config.training.problems:
+            print(f"Training the InferNet model for {problem_id}...")
+            if problem_id not in config.training.skip.problems:
+                pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
+        pool.close()
+        pool.join()
+    print("All processes finished for training step-level InferNet models.")
 
 
 if __name__ == "__main__":
