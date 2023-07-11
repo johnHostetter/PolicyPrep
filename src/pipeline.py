@@ -338,7 +338,7 @@ if __name__ == "__main__":
             "(7): Training the InferNet model for each exercise (step-level) data file..."
         )
 
-        train_step_level_models()
+        train_step_level_models(args, config)
 
     # select the training data to be used for policy induction via offline reinforcement learning
     if args.step == 8 or (args.run_all and args.step <= 8):
