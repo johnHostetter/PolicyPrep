@@ -2,6 +2,7 @@
 /data
 figures/
 models/
+src/policy/induction/d3rlpy/d3rlpy_logs
 
 # PyCharm files
 .idea
