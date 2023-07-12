@@ -101,7 +101,7 @@ def train_infer_net(problem_id: str) -> None:
     print("#####################")
     start_time = time.time()
     losses = []
-    for iteration in range(config.training.data.num_iterations):
+    for iteration in range(config.training.data.num_iterations + 1):
         batch = random.sample(infer_buffer, config.training.data.batch_size)
         states_actions, _, _, imm_rew_sum, _ = list(zip(*batch))
         states_actions = np.reshape(
