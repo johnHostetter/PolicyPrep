@@ -9,7 +9,7 @@ from typing import Dict
 import pandas as pd
 
 from YACS.yacs import Config
-from src.preprocess.data.selection import get_most_recent_data
+from src.preprocess.data.selection import get_most_recent_file
 from src.preprocess.infernet.common import read_data
 from src.utils.reproducibility import load_configuration, path_to_project_root
 
@@ -27,7 +27,9 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
     # load the configuration file
     config = load_configuration()
     # get the most recent problem-level data (with inferred rewards)
-    path_to_most_recent_data = get_most_recent_data(problem_id="problem")
+    path_to_most_recent_data = get_most_recent_file(
+        path_to_folder="data/with_inferred_rewards", problem_id="problem"
+    )
     problem_data = pd.read_csv(path_to_most_recent_data, header=0)
 
     # get the list of users in the problem-level data
