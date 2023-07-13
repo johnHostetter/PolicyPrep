@@ -7,6 +7,7 @@ file is used to train the policy using the D3RLPy library.
 """
 from pathlib import Path
 import multiprocessing as mp
+from typing import Union
 
 import pandas as pd
 from natsort import natsorted  # sorts lists "naturally"
@@ -40,7 +41,9 @@ def select_training_data_for_policy_induction(num_workers: int = 1) -> None:
             if "problem" not in problem_id:
                 problem_id += "(w)"
             try:
-                file = get_most_recent_data(problem_id)
+                file = get_most_recent_file(
+                    path_to_folder="data/with_inferred_rewards", problem_id=problem_id
+                )
             except FileNotFoundError as file_not_found_error:
                 print(repr(file_not_found_error))
                 continue
@@ -116,27 +119,34 @@ def move_and_convert_data(file: Path, problem_id: str) -> None:
     mdp_dataset.dump(str(output_directory / "d3rlpy" / f"{problem_id}.h5"))
 
 
-def get_most_recent_data(problem_id) -> Path:
+def get_most_recent_file(path_to_folder: Union[str, Path], problem_id: str, file_type: str) \
+        -> Path:
     """
     Get the path to the most recent data for the given exercise.
 
     Args:
+        path_to_folder: The path to the directory containing the data, models, or logs.
         problem_id: The problem ID of the exercise, or "problem" if the data is for the
         problem-level.
+        file_type: The type of file to get the most recent file for. This can be ".csv", ".h5",
+        or ".pth".
 
     Returns:
         The path to the most recent data for the given exercise.
     """
+    if not isinstance(path_to_folder, Path):
+        path_to_folder = Path(path_to_folder)
+
     # iterate over the different exercises of training data
     exercise_file_path_generator = natsorted(  # sort the files naturally
         # natsorted was chosen to sort the files naturally because the default sort
         # function sorts the files lexicographically, which is not what we want
         (  # ignore any problem-level data in this subdirectory
-            path_to_project_root() / "data" / "with_inferred_rewards"
-        ).glob(f"{problem_id}*_*.csv")
+            path_to_project_root() / path_to_folder
+        ).glob(f"{problem_id}*_*.{file_type}")
     )  # find all the .csv files in the directory that have the pattern "*_*.csv"
     if len(exercise_file_path_generator) == 0:
-        raise FileNotFoundError(f"No data found for {problem_id}...")
+        raise FileNotFoundError(f"No files found for {problem_id}...")
     file = exercise_file_path_generator[-1]  # get the most recent data for the exercise
     if file.is_dir():
         raise FileNotFoundError(f"Skipping {file.name} (it is a directory)...")
