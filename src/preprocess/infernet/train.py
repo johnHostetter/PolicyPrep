@@ -17,7 +17,7 @@ from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
 
 from src.preprocess.infernet.common import (
     read_data,
-    model_build,
+    build_model,
     calc_max_episode_length,
     normalize_data,
     create_buffer,
@@ -95,7 +95,7 @@ def train_infer_net(problem_id: str) -> None:
     print(f"{problem_id}: Max episode length is {max_len}")
 
     # Train Infer Net.
-    model = model_build(max_len, len(state_features) + len(state_actions))
+    model = build_model(max_len, len(state_features) + len(state_actions))
 
     # Train infer_net.
     print("#####################")
