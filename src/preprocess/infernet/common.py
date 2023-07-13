@@ -98,7 +98,7 @@ def load_infernet_model(path_to_model: Path) -> Sequential:
         The InferNet model.
     """
     return tf.keras.models.load_model(
-        path_to_model, custom_objects={'loss_function': loss_function}
+        path_to_model, custom_objects={"loss_function": loss_function}
     )
 
 
@@ -174,15 +174,31 @@ def create_buffer(
     Returns:
         The buffer.
     """
-    infer_buffer = []
+    if is_problem_level:
+        state_features = list(config.data.features.problem)
+        possible_actions = list(config.training.actions.problem)
+    else:
+        state_features = list(config.data.features.step)
+        possible_actions = list(config.training.actions.step)
+    # # one-hot encoding of actions; specify their order & add prefix; convert booleans to float
+    # actions_df: pd.DataFrame = pd.get_dummies(
+    #     normalized_data["action"]
+    # )[possible_actions].add_prefix("action_").astype(float)
+    # encoded_action_columns: list = list(actions_df.columns)
+    # normalized_data: pd.DataFrame = normalized_data.join(actions_df)
+    infer_buffer: list = []
     for user in user_ids:
         if user in config.training.skip.users:
             continue
         data_st = normalized_data[normalized_data["userID"] == user]
         if is_problem_level:
-            feats = data_st.iloc[:-1][list(config.data.features.problem)]
+            feats = data_st.iloc[:-1][
+                state_features  #+ encoded_action_columns
+            ]
         else:
-            feats = data_st.iloc[:-1][list(config.data.features.step)]
+            feats = data_st.iloc[:-1][
+                state_features  #+ encoded_action_columns
+            ]
         non_feats = data_st.iloc[:-1][list(config.data.features.basic)]
 
         if is_problem_level and len(feats) != len(config.training.problems):
@@ -199,14 +215,19 @@ def create_buffer(
             continue  # TODO: figure out why some have less than or more than 12 steps
 
         actions = data_st["action"].tolist()[:-1]
-        new_columns = {
-            "action_ps": np.array([1.0 if x == "problem" else 0.0 for x in actions]),
-            "action_we": np.array([1.0 if x == "example" else 0.0 for x in actions]),
-        }
-        if is_problem_level:  # faded worked example is only for the problem-level
-            new_columns["action_fwe"] = np.array(
-                [1.0 if x not in ("problem", "example") else 0.0 for x in actions]
+        new_columns = {}
+        for possible_action in possible_actions:
+            new_columns[f"action_{possible_action}"] = np.array(
+                [1.0 if x == possible_action else 0.0 for x in actions]
             )
+        # new_columns = {
+        #     "action_ps": np.array([1.0 if "problem" in x else 0.0 for x in actions]),
+        #     "action_we": np.array([1.0 if "example" in x else 0.0 for x in actions]),
+        # }
+        # if is_problem_level:  # faded worked example is only for the problem-level
+        #     new_columns["action_fwe"] = np.array(
+        #         [1.0 if ("problem" not in x and "example" not in x) else 0.0 for x in actions]
+        #     )
         feats = pd.concat(
             [
                 feats,
@@ -238,7 +259,7 @@ def create_buffer(
 
 
 def infer_and_save_rewards(
-    file_name: str,
+    problem_id: str,
     iteration: int,
     infer_buffer: List[tuple],
     max_len: int,
@@ -246,12 +267,14 @@ def infer_and_save_rewards(
     state_feature_columns: List[str],
     num_state_and_actions: int,
     is_problem_level: bool = True,
-) -> None:
+    inferred_reward_column_name: str = "inferred_reward",
+    save_inferred_rewards: bool = True,
+) -> pd.DataFrame:
     """
     Iterate through the buffer and infer rewards. Then save the rewards.
 
     Args:
-        file_name: The file name.
+        problem_id: The problem ID, or "problem" if the data is problem-level.
         iteration: The training iteration.
         infer_buffer: The buffer.
         max_len: The maximum episode length.
@@ -259,7 +282,8 @@ def infer_and_save_rewards(
         state_feature_columns: The state feature columns.
         num_state_and_actions: The number of state and actions.
         is_problem_level: Whether the episode is problem-level.
-
+        inferred_reward_column_name: The name of the inferred reward column. Defaults to
+        "inferred_reward". Useful for when hypothetical actions are used.
     Returns:
         None
     """
@@ -285,13 +309,18 @@ def infer_and_save_rewards(
         actions = ["action_ps", "action_we", "action_fwe"]
     else:
         actions = ["action_ps", "action_we"]
-    new_columns = actions + ["inferred_reward"]
+    new_columns = actions + [inferred_reward_column_name]
     result_df = pd.DataFrame(
         result,
         columns=list(config.data.features.basic)
         + list(state_feature_columns)
         + new_columns,
     )
-    output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
-    output_directory.mkdir(parents=True, exist_ok=True)
-    result_df.to_csv(output_directory / f"{file_name}_{iteration}.csv", index=False)
+    if save_inferred_rewards:
+        output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
+        output_directory.mkdir(parents=True, exist_ok=True)
+        result_df.to_csv(
+            output_directory / f"{problem_id}_{iteration}.csv", index=False
+        )
+
+    return result_df

@@ -61,22 +61,10 @@ def train_infer_net(problem_id: str) -> None:
     config = load_configuration()
     # set the random seed
     set_random_seed(seed=config.training.seed)
-    # determine if the data is problem-level or step-level
-    is_problem_level = "problem" in problem_id
-
-    tf.keras.backend.set_floatx("float64")
-    original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
-    mdp_dataset = data_frame_to_d3rlpy_dataset(original_data, problem_id)
-    user_ids = original_data["userID"].unique()
-    max_len = calc_max_episode_length(mdp_dataset)
+    is_problem_level, max_len, original_data, user_ids = infernet_setup(problem_id)
 
     # select the features and actions depending on if the data is problem-level or step-level
-    if is_problem_level:
-        state_features = config.data.features.problem
-        state_actions = config.training.actions.problem
-    else:
-        state_features = config.data.features.step
-        state_actions = config.training.actions.step
+    state_actions, state_features = get_features_and_actions(config, is_problem_level)
 
     # normalize the data
     normalized_data = normalize_data(
@@ -156,6 +144,27 @@ def train_infer_net(problem_id: str) -> None:
             model.save(path_to_models / f"{problem_id}_{iteration}.h5")
 
     print(f"Done training InferNet for {problem_id}.")
+
+
+def infernet_setup(problem_id):
+    # determine if the data is problem-level or step-level
+    is_problem_level = "problem" in problem_id
+    tf.keras.backend.set_floatx("float64")
+    original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
+    mdp_dataset = data_frame_to_d3rlpy_dataset(original_data, problem_id)
+    user_ids = original_data["userID"].unique()
+    max_len = calc_max_episode_length(mdp_dataset)
+    return is_problem_level, max_len, original_data, user_ids
+
+
+def get_features_and_actions(config, is_problem_level):
+    if is_problem_level:
+        state_features = config.data.features.problem
+        state_actions = config.training.actions.problem
+    else:
+        state_features = config.data.features.step
+        state_actions = config.training.actions.step
+    return state_actions, state_features
 
 
 def train_step_level_models(args: argparse.Namespace, config: Config) -> None:
