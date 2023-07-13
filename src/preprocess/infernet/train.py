@@ -6,6 +6,7 @@ import time
 import random
 import argparse
 import multiprocessing as mp
+from typing import Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -64,7 +65,9 @@ def train_infer_net(problem_id: str) -> None:
     is_problem_level, max_len, original_data, user_ids = infernet_setup(problem_id)
 
     # select the features and actions depending on if the data is problem-level or step-level
-    state_actions, state_features = get_features_and_actions(config, is_problem_level)
+    state_features, possible_actions = get_features_and_actions(
+        config, is_problem_level
+    )
 
     # normalize the data
     normalized_data = normalize_data(
@@ -79,11 +82,11 @@ def train_infer_net(problem_id: str) -> None:
         max_len=max_len,  # max_len is the max episode length; not required for problem-level data
     )
 
-    num_state_and_actions = len(state_features) + len(state_actions)
+    num_state_and_actions = len(state_features) + len(possible_actions)
     print(f"{problem_id}: Max episode length is {max_len}")
 
     # Train Infer Net.
-    model = build_model(max_len, len(state_features) + len(state_actions))
+    model = build_model(max_len, len(state_features) + len(possible_actions))
 
     # Train infer_net.
     print("#####################")
@@ -146,7 +149,21 @@ def train_infer_net(problem_id: str) -> None:
     print(f"Done training InferNet for {problem_id}.")
 
 
-def infernet_setup(problem_id):
+def infernet_setup(problem_id: str) -> Tuple[bool, int, pd.DataFrame, np.ndarray]:
+    """
+    Set up the InferNet model for the problem level data if "problem" is in problem_id. Otherwise,
+    set up the InferNet model for the step level data.
+
+    Args:
+        problem_id:
+
+    Returns:
+        A tuple containing the following:
+            is_problem_level: A boolean indicating if the data is problem-level or step-level.
+            max_len: The maximum episode length.
+            original_data: The original data.
+            user_ids: The user IDs.
+    """
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id
     tf.keras.backend.set_floatx("float64")
@@ -157,14 +174,22 @@ def infernet_setup(problem_id):
     return is_problem_level, max_len, original_data, user_ids
 
 
-def get_features_and_actions(config, is_problem_level):
+def get_features_and_actions(
+    config: Config, is_problem_level: bool
+) -> Tuple[List[str], List[str]]:
+    """
+    Get the features and actions depending on if the data is problem-level or step-level.
+
+    Args:
+        config: The configuration object.
+        is_problem_level: A boolean indicating if the data is problem-level or step-level.
+
+    Returns:
+        The features and actions.
+    """
     if is_problem_level:
-        state_features = config.data.features.problem
-        state_actions = config.training.actions.problem
-    else:
-        state_features = config.data.features.step
-        state_actions = config.training.actions.step
-    return state_actions, state_features
+        return config.data.features.problem, config.training.actions.problem
+    return config.data.features.step, config.training.actions.step
 
 
 def train_step_level_models(args: argparse.Namespace, config: Config) -> None:

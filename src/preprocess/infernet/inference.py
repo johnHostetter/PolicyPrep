@@ -1,7 +1,10 @@
 """
-
+This script loads a trained InferNet model and uses it to infer the rewards for a hypothetical
+action. This is helpful when trying to understand the impact of a particular action. For example,
+if you want to know what the reward would be if you changed the action from "elicit" to "tell",
+you can use this script to find out.
 """
-from typing import List, Union
+from typing import Union
 
 import pandas as pd
 
@@ -13,7 +16,7 @@ from src.preprocess.infernet.common import (
     infer_and_save_rewards,
 )
 from src.preprocess.data.selection import get_most_recent_file
-from utils.reproducibility import load_configuration, path_to_project_root
+from src.utils.reproducibility import load_configuration, path_to_project_root
 
 
 def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
@@ -34,7 +37,9 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
     is_problem_level, max_len, original_data, user_ids = infernet_setup(problem_id)
 
     # select the features and actions depending on if the data is problem-level or step-level
-    state_actions, state_features = get_features_and_actions(config, is_problem_level)
+    state_features, possible_actions = get_features_and_actions(
+        config, is_problem_level
+    )
 
     # normalize the data
     normalized_data = normalize_data(
@@ -42,7 +47,7 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
     )
 
     # modify the data to use the hypothetical action
-    if hypothetical_action in state_actions:
+    if hypothetical_action in possible_actions:
         normalized_data["action"] = hypothetical_action
     elif hypothetical_action == "correct":
         # use the correct action, no need to modify the data with a hypothetical action
@@ -81,7 +86,7 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
         max_len,
         model,
         state_features,
-        num_state_and_actions=len(state_features) + len(state_actions),
+        num_state_and_actions=len(state_features) + len(possible_actions),
         is_problem_level=is_problem_level,
         inferred_reward_column_name=f"inferred_reward_{hypothetical_action}",
         save_inferred_rewards=False,
@@ -91,10 +96,11 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
 if __name__ == "__main__":
     problem_id = "ex132(w)"
     config = load_configuration()
-    state_actions, _ = get_features_and_actions(config, is_problem_level=False)
+    _, possible_actions = get_features_and_actions(
+        config, is_problem_level="problem" in problem_id
+    )
     results_df: Union[None, pd.DataFrame] = None
-    possible_actions = ["correct"]
-    possible_actions.extend(state_actions)
+    possible_actions.insert(0, "correct")  # start by using the correct action
     for action in possible_actions:
         print(
             f"Using InferNet to infer rewards for the hypothetical action of using {action} in "

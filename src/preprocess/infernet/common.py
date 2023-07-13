@@ -192,13 +192,9 @@ def create_buffer(
             continue
         data_st = normalized_data[normalized_data["userID"] == user]
         if is_problem_level:
-            feats = data_st.iloc[:-1][
-                state_features  #+ encoded_action_columns
-            ]
+            feats = data_st.iloc[:-1][state_features]  # + encoded_action_columns
         else:
-            feats = data_st.iloc[:-1][
-                state_features  #+ encoded_action_columns
-            ]
+            feats = data_st.iloc[:-1][state_features]  # + encoded_action_columns
         non_feats = data_st.iloc[:-1][list(config.data.features.basic)]
 
         if is_problem_level and len(feats) != len(config.training.problems):

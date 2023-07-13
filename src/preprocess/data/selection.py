@@ -119,8 +119,9 @@ def move_and_convert_data(file: Path, problem_id: str) -> None:
     mdp_dataset.dump(str(output_directory / "d3rlpy" / f"{problem_id}.h5"))
 
 
-def get_most_recent_file(path_to_folder: Union[str, Path], problem_id: str, file_type: str) \
-        -> Path:
+def get_most_recent_file(
+    path_to_folder: Union[str, Path], problem_id: str, file_type: str
+) -> Path:
     """
     Get the path to the most recent data for the given exercise.
 
