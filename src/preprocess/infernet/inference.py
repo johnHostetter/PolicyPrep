@@ -91,7 +91,7 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
 if __name__ == "__main__":
     problem_id = "ex132(w)"
     config = load_configuration()
-    state_actions, _ = get_features_and_actions(config, is_problem_level=True)
+    state_actions, _ = get_features_and_actions(config, is_problem_level=False)
     results_df: Union[None, pd.DataFrame] = None
     possible_actions = ["correct"]
     possible_actions.extend(state_actions)
