@@ -38,8 +38,12 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
 
     """
     print("Loading data...")
-    path_to_policy_output_directory = path_to_project_root() / "output" / "policy" / policy_name
-    policy_output_df = pd.read_csv(path_to_policy_output_directory / f"{problem_id}.csv")
+    path_to_policy_output_directory = (
+        path_to_project_root() / "output" / "policy" / policy_name
+    )
+    policy_output_df = pd.read_csv(
+        path_to_policy_output_directory / f"{problem_id}.csv"
+    )
     print("Finished loading data.")
 
     if "problem" in problem_id:
