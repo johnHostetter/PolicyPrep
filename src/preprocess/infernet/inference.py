@@ -100,6 +100,7 @@ if __name__ == "__main__":
         config, is_problem_level="problem" in problem_id
     )
     results_df: Union[None, pd.DataFrame] = None
+    possible_actions = list(possible_actions)
     possible_actions.insert(0, "correct")  # start by using the correct action
     for action in possible_actions:
         print(
