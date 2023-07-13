@@ -1,6 +1,7 @@
 """
 This file contains the common functions used in the InferNet model.
 """
+from pathlib import Path
 from typing import List, Union
 
 import d3rlpy.dataset
@@ -41,7 +42,25 @@ def read_data(
     return data[data["userID"].isin(selected_users)]
 
 
-def model_build(max_ep_length: int, num_sas_features: int) -> Sequential:
+def loss_function(true_output, predicted_output):  # TODO: check arg & return types
+    """
+    InferNet's loss function.
+
+    Args:
+        true_output: The true output.
+        predicted_output: The predicted output.
+
+    Returns:
+        The loss.
+    """
+    inferred_sum = K.sum(predicted_output, axis=1)
+    inferred_sum = tf.reshape(
+        inferred_sum, (tf.shape(true_output)[0], tf.shape(true_output)[1])
+    )
+    return K.mean(K.square(inferred_sum - true_output), axis=-1)
+
+
+def build_model(max_ep_length: int, num_sas_features: int) -> Sequential:
     """
     Build the InferNet model.
 
@@ -64,26 +83,23 @@ def model_build(max_ep_length: int, num_sas_features: int) -> Sequential:
     model.add(TimeDistributed(Dense(256)))
     model.add(LeakyReLU())
     model.add(TimeDistributed(Dense(1)))
-
-    def loss_function(true_output, predicted_output):  # TODO: check arg & return types
-        """
-        InferNet's loss function.
-
-        Args:
-            true_output: The true output.
-            predicted_output: The predicted output.
-
-        Returns:
-            The loss.
-        """
-        inferred_sum = K.sum(predicted_output, axis=1)
-        inferred_sum = tf.reshape(
-            inferred_sum, (tf.shape(true_output)[0], tf.shape(true_output)[1])
-        )
-        return K.mean(K.square(inferred_sum - true_output), axis=-1)
-
     model.compile(loss=loss_function, optimizer=Adam(learning_rate=0.0001))
     return model
+
+
+def load_infernet_model(path_to_model: Path) -> Sequential:
+    """
+    Load the InferNet model.
+
+    Args:
+        path_to_model: The path to the model.
+
+    Returns:
+        The InferNet model.
+    """
+    return tf.keras.models.load_model(
+        path_to_model, custom_objects={'loss_function': loss_function}
+    )
 
 
 def calc_max_episode_length(mdp_dataset: d3rlpy.dataset.MDPDataset) -> int:
