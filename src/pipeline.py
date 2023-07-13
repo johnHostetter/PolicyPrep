@@ -174,9 +174,10 @@ How to run a single step of the pipeline for a specific exercise:
 import argparse
 import multiprocessing as mp
 
+from src.policy.induction.d3rlpy.dqn import induce_dqn_policies
 from src.preprocess.data.lookup import lookup_semester_grades_and_append_if_missing
 from src.preprocess.infernet.train import (
-    train_infer_net,
+    use_infer_net,
     train_step_level_models,
 )
 from src.preprocess.data.download import download_semester_data
@@ -325,7 +326,7 @@ if __name__ == "__main__":
     # train the InferNet model for the problem level data
     if args.step == 5 or (args.run_all and args.step <= 5):
         print("(5): Training the InferNet model for the problem level data...")
-        train_infer_net(problem_id="problem")
+        use_infer_net(problem_id="problem")
 
     # propagate problem-level rewards to step-level rewards
     if args.step == 6 or (args.run_all and args.step <= 6):
@@ -347,3 +348,10 @@ if __name__ == "__main__":
             "via offline reinforcement learning..."
         )
         select_training_data_for_policy_induction(num_workers=args.num_workers)
+
+    # induce policies via selected offline reinforcement learning algorithms & training data
+    if args.step == 9 or (args.run_all and args.step <= 9):
+        print(
+            "(9) Training the policy induction model using the selected training data..."
+        )
+        induce_dqn_policies()
