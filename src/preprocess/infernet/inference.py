@@ -4,6 +4,7 @@ action. This is helpful when trying to understand the impact of a particular act
 if you want to know what the reward would be if you changed the action from "elicit" to "tell",
 you can use this script to find out.
 """
+import os
 from typing import Union
 
 import pandas as pd
@@ -70,7 +71,9 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
     # load the most recent model
     print("Loading model...")
     path_to_model = get_most_recent_file(
-        path_to_folder="models", problem_id=problem_id, file_type="h5"
+        path_to_folder="models" + os.sep + "infernet",
+        problem_id=problem_id,
+        extension="h5",
     )
     model = load_infernet_model(path_to_model)
 

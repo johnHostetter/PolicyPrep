@@ -283,24 +283,66 @@ def infer_and_save_rewards(
     Returns:
         None
     """
-    result = []
+    # result = []
     config = load_configuration()
-    for state_transactions in range(len(infer_buffer)):
-        states_actions, non_feats, _, _, length = infer_buffer[state_transactions]
-        non_feats = np.array(non_feats)
-        states_actions = np.reshape(states_actions, (1, max_len, num_state_and_actions))
-        inf_rews = model.predict(states_actions)
+    # Preallocate the result list
+    result = []
 
-        states_actions = np.reshape(states_actions, (max_len, num_state_and_actions))
+    # Prepare inputs for batched prediction
+    batch_states_actions = []
+    batch_non_feats = []
+    batch_lengths = []
+
+    for states_actions, non_feats, _, _, length in infer_buffer:
+        non_feats = np.array(non_feats)
+        batch_states_actions.append(
+            np.reshape(states_actions, (max_len, num_state_and_actions))
+        )
+        batch_non_feats.append(non_feats)
+        batch_lengths.append(length)
+
+    batch_states_actions = np.array(batch_states_actions)
+    batch_non_feats = np.array(batch_non_feats)
+    batch_lengths = np.array(batch_lengths)
+
+    # Perform batched predictions
+    inf_rews = model.predict(batch_states_actions, batch_size=32, verbose=0)
+    inf_rews = tf.squeeze(inf_rews, axis=-1)
+
+    for i in range(len(infer_buffer)):
+        states_actions = batch_states_actions[i]
+        non_feats = batch_non_feats[i]
+        length = batch_lengths[i]
+        inf_rews_i = inf_rews[i]
+
         if not is_problem_level:  # step-level only operations
             states_actions = states_actions[:length]
-            inf_rews = np.reshape(inf_rews, (max_len, 1))
-            inf_rews = inf_rews[:length]
-        inf_rews = np.reshape(inf_rews, (length, 1))
-        all_feats = np.concatenate((non_feats, states_actions, inf_rews), axis=-1)
-        for row in all_feats:
-            result.append(row)
+            inf_rews_i = inf_rews_i[:length]
+
+        all_feats = np.concatenate(
+            (non_feats[:length], states_actions, inf_rews_i[:, None]), axis=-1
+        )
+        result.extend(all_feats)
+
+    # Convert the result list to a NumPy array
     result = np.array(result)
+
+    # for state_transactions in range(len(infer_buffer)):
+    #     states_actions, non_feats, _, _, length = infer_buffer[state_transactions]
+    #     non_feats = np.array(non_feats)
+    #     states_actions = np.reshape(states_actions, (1, max_len, num_state_and_actions))
+    #     inf_rews = model.predict(states_actions, verbose=0)
+    #
+    #     states_actions = np.reshape(states_actions, (max_len, num_state_and_actions))
+    #     if not is_problem_level:  # step-level only operations
+    #         states_actions = states_actions[:length]
+    #         inf_rews = np.reshape(inf_rews, (max_len, 1))
+    #         inf_rews = inf_rews[:length]
+    #     inf_rews = np.reshape(inf_rews, (length, 1))
+    #     all_feats = np.concatenate((non_feats, states_actions, inf_rews), axis=-1)
+    #     for row in all_feats:
+    #         result.append(row)
+    # result = np.array(result)
     if is_problem_level:
         actions = ["action_ps", "action_we", "action_fwe"]
     else:

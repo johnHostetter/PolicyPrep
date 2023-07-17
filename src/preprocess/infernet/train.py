@@ -85,10 +85,9 @@ def train_infer_net(problem_id: str) -> None:
     num_state_and_actions = len(state_features) + len(possible_actions)
     print(f"{problem_id}: Max episode length is {max_len}")
 
-    # Train Infer Net.
     model = build_model(max_len, len(state_features) + len(possible_actions))
 
-    # Train infer_net.
+    # Train the InferNet model
     print("#####################")
     start_time = time.time()
     losses = []
@@ -142,7 +141,7 @@ def train_infer_net(problem_id: str) -> None:
                 path_to_figures / f"loss_{problem_id}_{iteration}.csv", index=False
             )
             # save the model
-            path_to_models = path_to_project_root() / "models"
+            path_to_models = path_to_project_root() / "models" / "infernet"
             path_to_models.mkdir(parents=True, exist_ok=True)
             model.save(path_to_models / f"{problem_id}_{iteration}.h5")
 
@@ -192,20 +191,24 @@ def get_features_and_actions(
     return config.data.features.step, config.training.actions.step
 
 
-def train_step_level_models(args: argparse.Namespace, config: Config) -> None:
+def train_step_level_models(
+    args: argparse.Namespace, config: Config, increase_num_workers: bool = False
+) -> None:
     """
     Train the InferNet models for all step-level problems.
 
     Args:
         args: The command line arguments.
         config: The configuration object.
+        increase_num_workers: A boolean indicating if the number of workers should be increased.
+        This can be enabled to speed up training, but it may cause memory issues. Defaults to False.
 
     Returns:
         None
     """
-    # temporarily limit the number of workers to the number of GPUs available
     physical_devices = tf.config.list_physical_devices("GPU")
-    if len(physical_devices) > 0:
+    if increase_num_workers and len(physical_devices) > 0:
+        # temporarily limit the number of workers to the number of GPUs available
         device = cuda.get_current_device()
         num_workers = getattr(device, "MULTIPROCESSOR_COUNT", 1)
     else:

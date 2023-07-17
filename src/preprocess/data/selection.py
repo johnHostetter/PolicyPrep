@@ -42,7 +42,9 @@ def select_training_data_for_policy_induction(num_workers: int = 1) -> None:
                 problem_id += "(w)"
             try:
                 file = get_most_recent_file(
-                    path_to_folder="data/with_inferred_rewards", problem_id=problem_id
+                    path_to_folder="data/with_inferred_rewards",
+                    problem_id=problem_id,
+                    extension=".csv",
                 )
             except FileNotFoundError as file_not_found_error:
                 print(repr(file_not_found_error))
@@ -120,7 +122,7 @@ def move_and_convert_data(file: Path, problem_id: str) -> None:
 
 
 def get_most_recent_file(
-    path_to_folder: Union[str, Path], problem_id: str, file_type: str
+    path_to_folder: Union[str, Path], problem_id: str, extension: str
 ) -> Path:
     """
     Get the path to the most recent data for the given exercise.
@@ -129,7 +131,7 @@ def get_most_recent_file(
         path_to_folder: The path to the directory containing the data, models, or logs.
         problem_id: The problem ID of the exercise, or "problem" if the data is for the
         problem-level.
-        file_type: The type of file to get the most recent file for. This can be ".csv", ".h5",
+        extension: The type of file to get the most recent file for. This can be ".csv", ".h5",
         or ".pth".
 
     Returns:
@@ -144,7 +146,7 @@ def get_most_recent_file(
         # function sorts the files lexicographically, which is not what we want
         (  # ignore any problem-level data in this subdirectory
             path_to_project_root() / path_to_folder
-        ).glob(f"{problem_id}*_*.{file_type}")
+        ).glob(f"{problem_id}*_*.{extension}")
     )  # find all the .csv files in the directory that have the pattern "*_*.csv"
     if len(exercise_file_path_generator) == 0:
         raise FileNotFoundError(f"No files found for {problem_id}...")
