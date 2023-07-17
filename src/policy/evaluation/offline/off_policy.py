@@ -18,8 +18,8 @@ These metrics help give a sense of how well the policy performs on the given pro
 metrics are computed by comparing the policy's actions to the real actions taken by the user.
 The real actions are inferred from the user's interactions with the system.
 """
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from src.utils.reproducibility import path_to_project_root
 from src.utils.importance_sampling import ImportanceSampling
@@ -39,7 +39,7 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
     """
     print("Loading data...")
     path_to_policy_output_directory = (
-        path_to_project_root() / "output" / "policy" / policy_name
+        path_to_project_root() / "data" / "for_policy_evaluation" / policy_name
     )
     policy_output_df = pd.read_csv(
         path_to_policy_output_directory / f"{problem_id}.csv"
@@ -53,9 +53,9 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
             "action",
             "problem",
             "inferred_reward",
-            "ps_Q_value",
-            "fwe_Q_value",
-            "we_Q_value",
+            "problem_Q_value",
+            "step_decision_Q_value",
+            "example_Q_value",
         ]
     else:
         # step-level
@@ -64,17 +64,17 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
             "action",
             "problem",
             "inferred_reward",
-            "elicit_Q_value",
-            "tell_Q_value",
+            "problem_Q_value",
+            "example_Q_value",
         ]
 
     df = policy_output_df[features]
     if "problem" in problem_id:
         df = df.rename(
-            columns={"ps_Q_value": "ps", "fwe_Q_value": "fwe", "we_Q_value": "we"}
+            columns={"problem_Q_value": "ps", "step_decision_Q_value": "fwe", "example_Q_value": "we"}
         )
     else:
-        df = df.rename(columns={"elicit_Q_value": "ps", "tell_Q_value": "we"})
+        df = df.rename(columns={"problem_Q_value": "ps", "example_Q_value": "we"})
 
     # action label: example 1, problem 0
     df["real_action"] = 1
@@ -94,4 +94,4 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
 
 
 if __name__ == "__main__":
-    evaluate_policy_with_importance_sampling(policy_name="dqn", problem_id="ex132")
+    evaluate_policy_with_importance_sampling(policy_name="dqn", problem_id="ex132(w)")

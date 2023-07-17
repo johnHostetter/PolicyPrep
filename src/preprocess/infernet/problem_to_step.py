@@ -86,10 +86,10 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
 
 
 def propagate_problem_reward_to_step_level_data(
-        config: Config,
-        file: Path,
-        step_data: pd.DataFrame,
-        user_problem_reward: Dict[str, Dict[str, float]],
+    config: Config,
+    file: Path,
+    step_data: pd.DataFrame,
+    user_problem_reward: Dict[str, Dict[str, float]],
 ) -> None:
     """
     Propagate the rewards from the problem level to the step level. This function is
@@ -97,34 +97,23 @@ def propagate_problem_reward_to_step_level_data(
     called in parallel for each exercise. The function modifies the `step_data`
     DataFrame in-place. The `step_data` DataFrame is saved to the appropriate
     subdirectory.
-
     Args:
         config: The configuration file.
         file: The path to the step-level data.
         step_data: The step-level data.
         user_problem_reward: A dictionary of the form {user_id: {problem: reward}}.
-
     Returns:
         None
     """
-
-    def propagate_reward(user: str) -> None:
-        """
-        Propagate the reward for a given user.
-
-        Args:
-            user: The user ID.
-
-        Returns:
-            None
-        """
+    user_ids = step_data["userID"].unique()
+    for user in user_ids:
         if (
-                # skip users that are not in the problem-level data
-                user in config.training.skip.users
-                # skip users that have not solved all the problems
-                or len(user_problem_reward[user].keys()) != len(config.training.problems)
+            # skip users that are not in the problem-level data
+            user in config.training.skip.users
+            # skip users that have not solved all the problems
+            or len(user_problem_reward[user].keys()) != len(config.training.problems)
         ):
-            return
+            continue
         for problem in config.training.problems:
             if problem in config.training.skip.problems:
                 continue  # skip the problem; it is not used for training
@@ -135,12 +124,6 @@ def propagate_problem_reward_to_step_level_data(
                 & (step_data.decisionPoint == "probEnd"),
                 "reward",
             ] = nn_inferred_reward
-
-    user_ids = step_data["userID"].unique()
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        executor.map(propagate_reward, user_ids)
-
     step_data.to_csv(
         path_to_project_root() / "data" / "for_inferring_rewards" / file.name,
         index=False,

@@ -99,7 +99,6 @@ def train_infer_net(problem_id: str) -> None:
             (config.training.data.batch_size, max_len, num_state_and_actions),
         )
         imm_rew_sum = np.reshape(imm_rew_sum, (config.training.data.batch_size, 1))
-
         hist = model.fit(
             states_actions,
             imm_rew_sum,
