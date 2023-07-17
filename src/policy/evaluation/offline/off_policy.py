@@ -21,7 +21,8 @@ The real actions are inferred from the user's interactions with the system.
 import numpy as np
 import pandas as pd
 
-from src.utils.reproducibility import path_to_project_root
+from YACS.yacs import Config
+from src.utils.reproducibility import path_to_project_root, load_configuration
 from src.utils.importance_sampling import ImportanceSampling
 
 
@@ -39,7 +40,7 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
     """
     print("Loading data...")
     path_to_policy_output_directory = (
-        path_to_project_root() / "data" / "for_policy_evaluation" / policy_name
+            path_to_project_root() / "data" / "for_policy_evaluation" / policy_name
     )
     policy_output_df = pd.read_csv(
         path_to_policy_output_directory / f"{problem_id}.csv"
@@ -93,5 +94,30 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
         print("{},{},{}".format(policy_name, ope, value))
 
 
+def evaluate_dqn_policies(config: Config = None) -> None:
+    """
+    Evaluate the DQN policies using the offline off-policy evaluation (OPE) methods.
+
+    Args:
+        config: The configuration settings.
+
+    Returns:
+        None
+    """
+    if config is None:
+        config = load_configuration()
+    problems = ["problem"]
+    problems.extend(list(config.training.problems))
+    for problem_id in problems:
+        if problem_id in config.training.skip.problems:
+            continue  # skip the problem; it is not used for training
+        if "problem" not in problem_id:
+            problem_id += "(w)"
+        print(f"Evaluating the policy on {problem_id}...")
+        evaluate_policy_with_importance_sampling(
+            policy_name="dqn", problem_id=problem_id
+        )
+
+
 if __name__ == "__main__":
-    evaluate_policy_with_importance_sampling(policy_name="dqn", problem_id="ex132(w)")
+    evaluate_dqn_policies()

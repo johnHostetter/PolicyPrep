@@ -80,11 +80,6 @@ def move_and_convert_data(file: Path, problem_id: str) -> None:
     output_directory = path_to_project_root() / "data" / "for_policy_induction"
     for subdirectory in ["pandas", "d3rlpy"]:
         (output_directory / subdirectory).mkdir(parents=True, exist_ok=True)
-    # save the data frame to a .csv file in the subdirectory "pandas" for policy induction
-    data_frame.to_csv(
-        output_directory / "pandas" / f"{problem_id}.csv",
-        index=False,
-    )
     # before converting the data frame to an MDP dataset, we need to create a new column
     # called "action" that contains the action taken by the tutor
     # this is necessary because the data frame contains three columns that contain the
@@ -99,6 +94,13 @@ def move_and_convert_data(file: Path, problem_id: str) -> None:
     # taken by the tutor and reverses this one-hot encoding by choosing the column label for
     # each row where the label has the maximum value
     data_frame["action"] = data_frame[action_columns].idxmax(1)
+
+    # save the data frame to a .csv file in the subdirectory "pandas" for policy induction
+    data_frame.to_csv(
+        output_directory / "pandas" / f"{problem_id}.csv",
+        index=False,
+    )
+
     # drop the columns that contain the one-hot encoding of the action taken by the tutor
     data_frame.drop(
         columns=action_columns,
@@ -146,7 +148,7 @@ def get_most_recent_file(
         # function sorts the files lexicographically, which is not what we want
         (  # ignore any problem-level data in this subdirectory
             path_to_project_root() / path_to_folder
-        ).glob(f"{problem_id}*_*.{extension}")
+        ).glob(f"{problem_id}*_*{extension}")
     )  # find all the .csv files in the directory that have the pattern "*_*.csv"
     if len(exercise_file_path_generator) == 0:
         raise FileNotFoundError(f"No files found for {problem_id}...")

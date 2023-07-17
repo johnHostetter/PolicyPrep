@@ -73,7 +73,7 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
     path_to_model = get_most_recent_file(
         path_to_folder="models" + os.sep + "infernet",
         problem_id=problem_id,
-        extension="h5",
+        extension=".h5",
     )
     model = load_infernet_model(path_to_model)
 
