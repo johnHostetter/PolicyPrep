@@ -2,7 +2,7 @@
 This script is used to propagate the rewards from the problem level to the step level.
 """
 import multiprocessing as mp
-import concurrent.futures
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict
 import pandas as pd
@@ -40,10 +40,18 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
     infer_rewards = problem_data.inferred_reward.values
 
     # create a dictionary of the form {user_id: {problem: reward}}
-    user_problem_reward = {
-        user_id: {problem[:-1] if problem.endswith("w") else problem: infer_reward}
-        for user_id, problem, infer_reward in zip(user_ids, problems, infer_rewards)
-    }
+    # user_problem_reward = {
+    #     user_id: {problem[:-1] if problem.endswith("w") else problem: infer_reward}
+    #     for user_id, problem, infer_reward in zip(user_ids, problems, infer_rewards)
+    # }
+    user_problem_reward = defaultdict(dict)
+    for iteration, user_id in enumerate(user_ids):
+        problem = problems[iteration]
+        # problem ID contains "w" if the exercise is shown as a word problem
+        if "w" in problem[-1]:  # if the last character is "w", remove it
+            problem = problem[:-1]  # remove the last character
+        infer_reward = infer_rewards[iteration]
+        user_problem_reward[user_id][problem] = infer_reward
 
     # iterate over the different exercises of training data
     exercise_file_path_generator = (
@@ -58,9 +66,6 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
                 print(f"Skipping {file.name} (it is a directory)...")
                 continue
 
-            print(
-                f"Propagating inferred immediate rewards from problem-level to {file.name}..."
-            )
             step_data = read_data(
                 file.name,
                 subdirectory="for_propagating_rewards",
@@ -105,6 +110,9 @@ def propagate_problem_reward_to_step_level_data(
     Returns:
         None
     """
+    print(
+        f"Propagating inferred immediate rewards from problem-level to {file.name}..."
+    )
     user_ids = step_data["userID"].unique()
     for user in user_ids:
         if (
