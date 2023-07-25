@@ -245,11 +245,11 @@ def parse_keyword_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--run_specific",
-        default=True,
+        default=False,
         action='store_false',
-        help="If True, continue with steps after the step that is specified "
+        help="If False, continue with steps after the step that is specified "
         "by the --step argument. "
-        "If False, do not continue with steps after the step that is specified "
+        "If True, do not continue with steps after the step that is specified "
         "by the --step argument.",
     )
     parser.add_argument(
