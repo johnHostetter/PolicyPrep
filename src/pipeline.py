@@ -104,17 +104,17 @@ How to run a step of the pipeline & all steps after that step:
 
 How to run a single step of the pipeline:
 
-    The --run_all flag is set to True by default, where all the code (i.e., steps) after the
+    The --run_specific flag is not set by default. If it is not set,  all the code (i.e., steps) after the
     specified step will be executed. If you only want to execute the code for the specified step,
-    set the --run_all flag to False. For example, if you want to run step (3) above, run the
-    following command from the project root directory:
+    set the --run_specific flag. For example, if you want to run step (3) above, and only that step,
+    run the following command from the project root directory:
 
-        python -m src/preprocess/data/to_infernet_format --step 3 --run_all False
+        python -m src/preprocess/data/to_infernet_format --step 3 --run_specific
 
-    This will execute the code for step (3) above only. If you set the --run_all flag to True,
+    This will execute the code for step (3) above only. If you do not set the --run_specific flag,
     the code for all steps after the specified step will be executed. For example, if you specify
-    step 3 and set the --run_all flag to True, the code for steps 3, 4, 5, 6, 7, 8, and 9 will be
-    executed. If you specify step 5 and set the --run_all flag to False, the code for only step 5
+    step 3 and do not set the --run_specific flag, the code for steps 3, 4, 5, 6, 7, 8, and 9 will be
+    executed. If you specify step 5 and set the --run_specific flag, the code for only step 5
     will be executed.
 
 About the multiprocessing:
@@ -244,9 +244,9 @@ def parse_keyword_args() -> argparse.Namespace:
         "8: train the policy induction model using the data files selected in step (7) above.",
     )
     parser.add_argument(
-        "--run_all",
-        type=bool,
+        "--run_specific",
         default=True,
+        action='store_false',
         help="If True, continue with steps after the step that is specified "
         "by the --step argument. "
         "If False, do not continue with steps after the step that is specified "
@@ -303,7 +303,7 @@ if __name__ == "__main__":
 
     # find the semester data files and lookup the grades for each student and
     # append them to the data files if they are missing
-    if args.step == 2 or (args.run_all and args.step <= 2):
+    if args.step == 2 or (args.run_specific and args.step <= 2):
         print(
             "(2): Looking up the grades for each student and appending them to the "
             "data files if they are missing..."
@@ -314,29 +314,29 @@ if __name__ == "__main__":
         )
 
     # preprocess the data to make it compatible with InferNet
-    if args.step == 3 or (args.run_all and args.step <= 3):
+    if args.step == 3 or (args.run_specific and args.step <= 3):
         print("(3): Preprocessing the data to make it compatible with InferNet...")
         iterate_over_semester_data(
             subdirectory="raw", function_to_perform=convert_data_format
         )
 
     # aggregate the data into a single file
-    if args.step == 4 or (args.run_all and args.step <= 4):
+    if args.step == 4 or (args.run_specific and args.step <= 4):
         print("(4): Aggregating the data into a single file...")
         aggregate_data_for_inferring_rewards()
 
     # train the InferNet model for the problem level data
-    if args.step == 5 or (args.run_all and args.step <= 5):
+    if args.step == 5 or (args.run_specific and args.step <= 5):
         print("(5): Training the InferNet model for the problem level data...")
         train_infer_net(problem_id="problem")
 
     # propagate problem-level rewards to step-level rewards
-    if args.step == 6 or (args.run_all and args.step <= 6):
+    if args.step == 6 or (args.run_specific and args.step <= 6):
         print("(6): Propagating problem-level rewards to step-level rewards...")
         propagate_problem_level_rewards_to_step_level(num_workers=args.num_workers)
 
     # train an InferNet model for each exercise
-    if args.step == 7 or (args.run_all and args.step <= 7):
+    if args.step == 7 or (args.run_specific and args.step <= 7):
         print(
             "(7): Training the InferNet model for each exercise (step-level) data file..."
         )
@@ -344,7 +344,7 @@ if __name__ == "__main__":
         train_step_level_models(args, config)
 
     # select the training data to be used for policy induction via offline reinforcement learning
-    if args.step == 8 or (args.run_all and args.step <= 8):
+    if args.step == 8 or (args.run_specific and args.step <= 8):
         print(
             "(8) Selecting the training data to be used for policy induction "
             "via offline reinforcement learning..."
@@ -352,21 +352,21 @@ if __name__ == "__main__":
         select_training_data_for_policy_induction(num_workers=args.num_workers)
 
     # induce policies via selected offline reinforcement learning algorithms & training data
-    if args.step == 9 or (args.run_all and args.step <= 9):
+    if args.step == 9 or (args.run_specific and args.step <= 9):
         print(
             "(9) Training the policy induction model using the selected training data..."
         )
         induce_dqn_policies()
 
     # calculate the Q-values for the induced policies
-    if args.step == 10 or (args.run_all and args.step <= 10):
+    if args.step == 10 or (args.run_specific and args.step <= 10):
         print(
             "(10) Calculating the Q-values for the induced policies..."
         )
         calculate_dqn_q_values()
 
     # evaluate the induced policies using their respective calculated Q-values
-    if args.step == 11 or (args.run_all and args.step <= 11):
+    if args.step == 11 or (args.run_specific and args.step <= 11):
         print(
             "(10) Evaluating the policy induction model using the selected training data..."
         )
