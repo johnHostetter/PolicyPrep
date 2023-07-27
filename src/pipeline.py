@@ -196,7 +196,6 @@ from src.utils.reproducibility import (
     load_configuration,
 )  # order matters, must be imported last
 
-
 def parse_keyword_args() -> argparse.Namespace:
     """
     Parse the keyword arguments passed to the script.
@@ -246,7 +245,7 @@ def parse_keyword_args() -> argparse.Namespace:
     parser.add_argument(
         "--run_specific",
         default=False,
-        action='store_false',
+        action='store_true',
         help="If False, continue with steps after the step that is specified "
         "by the --step argument. "
         "If True, do not continue with steps after the step that is specified "
@@ -303,40 +302,43 @@ if __name__ == "__main__":
 
     # find the semester data files and lookup the grades for each student and
     # append them to the data files if they are missing
-    if args.step == 2 or (args.run_specific and args.step <= 2):
+    if args.step == 2 or (not args.run_specific and args.step <= 2):
         print(
             "(2): Looking up the grades for each student and appending them to the "
             "data files if they are missing..."
         )
         iterate_over_semester_data(
             subdirectory="raw",
+            config_file=config,
             function_to_perform=lookup_semester_grades_and_append_if_missing,
         )
 
     # preprocess the data to make it compatible with InferNet
-    if args.step == 3 or (args.run_specific and args.step <= 3):
+    if args.step == 3 or (not args.run_specific and args.step <= 3):
         print("(3): Preprocessing the data to make it compatible with InferNet...")
         iterate_over_semester_data(
-            subdirectory="raw", function_to_perform=convert_data_format
+            subdirectory="raw",
+            config_file=config,
+            function_to_perform=convert_data_format
         )
 
     # aggregate the data into a single file
-    if args.step == 4 or (args.run_specific and args.step <= 4):
+    if args.step == 4 or (not args.run_specific and args.step <= 4):
         print("(4): Aggregating the data into a single file...")
         aggregate_data_for_inferring_rewards()
 
     # train the InferNet model for the problem level data
-    if args.step == 5 or (args.run_specific and args.step <= 5):
+    if args.step == 5 or (not args.run_specific and args.step <= 5):
         print("(5): Training the InferNet model for the problem level data...")
         train_infer_net(problem_id="problem")
 
     # propagate problem-level rewards to step-level rewards
-    if args.step == 6 or (args.run_specific and args.step <= 6):
+    if args.step == 6 or (not args.run_specific and args.step <= 6):
         print("(6): Propagating problem-level rewards to step-level rewards...")
         propagate_problem_level_rewards_to_step_level(num_workers=args.num_workers)
 
     # train an InferNet model for each exercise
-    if args.step == 7 or (args.run_specific and args.step <= 7):
+    if args.step == 7 or (not args.run_specific and args.step <= 7):
         print(
             "(7): Training the InferNet model for each exercise (step-level) data file..."
         )
@@ -344,7 +346,7 @@ if __name__ == "__main__":
         train_step_level_models(args, config)
 
     # select the training data to be used for policy induction via offline reinforcement learning
-    if args.step == 8 or (args.run_specific and args.step <= 8):
+    if args.step == 8 or (not args.run_specific and args.step <= 8):
         print(
             "(8) Selecting the training data to be used for policy induction "
             "via offline reinforcement learning..."
@@ -352,21 +354,21 @@ if __name__ == "__main__":
         select_training_data_for_policy_induction(num_workers=args.num_workers)
 
     # induce policies via selected offline reinforcement learning algorithms & training data
-    if args.step == 9 or (args.run_specific and args.step <= 9):
+    if args.step == 9 or (not args.run_specific and args.step <= 9):
         print(
             "(9) Training the policy induction model using the selected training data..."
         )
         induce_dqn_policies()
 
     # calculate the Q-values for the induced policies
-    if args.step == 10 or (args.run_specific and args.step <= 10):
+    if args.step == 10 or (not args.run_specific and args.step <= 10):
         print(
             "(10) Calculating the Q-values for the induced policies..."
         )
         calculate_dqn_q_values()
 
     # evaluate the induced policies using their respective calculated Q-values
-    if args.step == 11 or (args.run_specific and args.step <= 11):
+    if args.step == 11 or (not args.run_specific and args.step <= 11):
         print(
             "(10) Evaluating the policy induction model using the selected training data..."
         )
