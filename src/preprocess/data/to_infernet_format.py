@@ -60,6 +60,7 @@ def iterate_over_semester_data(
 
     Args:
         subdirectory: The subdirectory of the data folder to iterate over.
+        config_file: The configuration file to use
         function_to_perform: The function to perform on each semester folder.
 
     Returns:
