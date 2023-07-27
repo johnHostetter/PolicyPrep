@@ -51,6 +51,7 @@ def minimum_id(semester: str) -> int:
 
 def iterate_over_semester_data(
     subdirectory: str,
+    config_file: Config,
     function_to_perform: Callable[[Path, str, Config], None],
 ) -> None:
     """
@@ -66,7 +67,7 @@ def iterate_over_semester_data(
     """
     # load the configuration settings
     pd.options.mode.chained_assignment = None
-    config = load_configuration("default_configuration.yaml")
+    config = config_file
 
     # iterate over the different semesters of training data
 
