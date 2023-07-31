@@ -1,8 +1,9 @@
 """
 Use the DQN algorithm from d3rlpy to train a policy.
 """
-import multiprocessing as mp
 import os
+import multiprocessing as mp
+
 
 import d3rlpy.algos
 import pandas as pd
