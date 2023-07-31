@@ -174,9 +174,9 @@ How to run a single step of the pipeline for a specific exercise:
 import argparse
 import multiprocessing as mp
 
-from src.policy.inference.with_d3rlpy_dqn import calculate_dqn_q_values
-from src.policy.evaluation.offline.off_policy import evaluate_dqn_policies
-from src.policy.induction.d3rlpy.dqn import induce_dqn_policies
+from src.policy.inference.with_d3rlpy_dqn import calculate_d3rlpy_algo_q_values
+from src.policy.evaluation.offline.off_policy import evaluate_all_policies
+from src.policy.induction.d3rlpy.dqn import induce_policies_with_d3rlpy
 from src.preprocess.data.lookup import lookup_semester_grades_and_append_if_missing
 from src.preprocess.infernet.train import (
     train_infer_net,
@@ -358,18 +358,18 @@ if __name__ == "__main__":
         print(
             "(9) Training the policy induction model using the selected training data..."
         )
-        induce_dqn_policies()
+        induce_policies_with_d3rlpy()
 
-    # calculate the Q-values for the induced policies
+        # calculate the Q-values for the induced policies
     if args.step == 10 or (not args.run_specific and args.step <= 10):
         print(
             "(10) Calculating the Q-values for the induced policies..."
         )
-        calculate_dqn_q_values()
+        calculate_d3rlpy_algo_q_values()
 
-    # evaluate the induced policies using their respective calculated Q-values
+        # evaluate the induced policies using their respective calculated Q-values
     if args.step == 11 or (not args.run_specific and args.step <= 11):
         print(
-            "(10) Evaluating the policy induction model using the selected training data..."
+            "(11) Evaluating the policy induction model using the selected training data..."
         )
-        evaluate_dqn_policies()
+        evaluate_all_policies()
