@@ -56,7 +56,7 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
     # iterate over the different exercises of training data
     exercise_file_path_generator = (
         (  # ignore any problem-level data in this subdirectory
-                path_to_project_root() / "data" / "for_propagating_rewards"
+            path_to_project_root() / "data" / "for_propagating_rewards"
         ).glob("*(w).csv")
     )  # find all the .csv files in the directory that end with "(w).csv"
 

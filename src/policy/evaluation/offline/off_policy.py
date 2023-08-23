@@ -25,8 +25,14 @@ from YACS.yacs import Config
 from src.utils.reproducibility import path_to_project_root, load_configuration
 from src.utils.importance_sampling import ImportanceSampling
 
-column_names = ['Policy Name','Problem_ID', 'OPE', 'Value']  # Replace these with your desired column names
+column_names = [
+    "Policy Name",
+    "Problem_ID",
+    "OPE",
+    "Value",
+]  # Replace these with your desired column names
 store_data = pd.DataFrame(columns=column_names)
+
 
 def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
     """
@@ -42,7 +48,7 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
     """
     print("Loading data...")
     path_to_policy_output_directory = (
-            path_to_project_root() / "data" / "for_policy_evaluation" / policy_name
+        path_to_project_root() / "data" / "for_policy_evaluation" / policy_name
     )
     policy_output_df = pd.read_csv(
         path_to_policy_output_directory / f"{problem_id}.csv"
@@ -69,11 +75,15 @@ def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str):
             "problem_Q_value",
             "example_Q_value",
         ]
-    #print(policy_output_df)
+    # print(policy_output_df)
     df = policy_output_df[features]
     if "problem" in problem_id:
         df = df.rename(
-            columns={"problem_Q_value": "ps", "step_decision_Q_value": "fwe", "example_Q_value": "we"}
+            columns={
+                "problem_Q_value": "ps",
+                "step_decision_Q_value": "fwe",
+                "example_Q_value": "we",
+            }
         )
     else:
         df = df.rename(columns={"problem_Q_value": "ps", "example_Q_value": "we"})
@@ -122,7 +132,13 @@ def evaluate_all_policies(config: Config = None) -> None:
             evaluate_policy_with_importance_sampling(
                 policy_name=algo, problem_id=problem_id
             )
-        directory_path = path_to_project_root() / "data" / "for_policy_evaluation" / "for_analysis" / algo
+        directory_path = (
+            path_to_project_root()
+            / "data"
+            / "for_policy_evaluation"
+            / "for_analysis"
+            / algo
+        )
         directory_path.mkdir(parents=True, exist_ok=True)
         file_name = "data_analysis_.csv"
         file_path = f"{directory_path}/{file_name}"

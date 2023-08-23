@@ -65,7 +65,7 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
                     args=[
                         mdp_dataset,
                         problem_id,
-                        d3rlpy.algos.get_algo(algo,discrete=bool)
+                        d3rlpy.algos.get_algo(algo, discrete=bool),
                     ],
                 )
         pool.close()
@@ -99,10 +99,18 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg) ->
     print(f"Finished training a {algorithm} policy for {problem_id}...")
     # make the directory if it does not exist already and save the model
     print(f"Saving the {algorithm} policy for {problem_id}...")
-    output_directory = path_to_project_root() / "models" / "d3rlpy" / repr(d3rlpy_alg) / os.stat()
+    output_directory = (
+        path_to_project_root() / "models" / "d3rlpy" / repr(d3rlpy_alg) / os.stat()
+    )
     output_directory.mkdir(parents=True, exist_ok=True)
     algorithm.save_model(
-        str(path_to_project_root() / "models" / "d3rlpy" / repr(d3rlpy_alg) / f"{problem_id}.pt")
+        str(
+            path_to_project_root()
+            / "models"
+            / "d3rlpy"
+            / repr(d3rlpy_alg)
+            / f"{problem_id}.pt"
+        )
     )
     print(f"Finished saving the {algorithm} policy for {problem_id}...")
 

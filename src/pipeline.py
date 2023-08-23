@@ -196,6 +196,7 @@ from src.utils.reproducibility import (
     load_configuration,
 )  # order matters, must be imported last
 
+
 def parse_keyword_args() -> argparse.Namespace:
     """
     Parse the keyword arguments passed to the script.
@@ -245,7 +246,7 @@ def parse_keyword_args() -> argparse.Namespace:
     parser.add_argument(
         "--run_specific",
         default=False,
-        action='store_true',
+        action="store_true",
         help="If False, continue with steps after the step that is specified "
         "by the --step argument. "
         "If True, do not continue with steps after the step that is specified "
@@ -319,7 +320,7 @@ if __name__ == "__main__":
         iterate_over_semester_data(
             subdirectory="raw",
             config_file=config,
-            function_to_perform=convert_data_format
+            function_to_perform=convert_data_format,
         )
 
     # aggregate the data into a single file
@@ -362,9 +363,7 @@ if __name__ == "__main__":
 
         # calculate the Q-values for the induced policies
     if args.step == 10 or (not args.run_specific and args.step <= 10):
-        print(
-            "(10) Calculating the Q-values for the induced policies..."
-        )
+        print("(10) Calculating the Q-values for the induced policies...")
         calculate_d3rlpy_algo_q_values()
 
         # evaluate the induced policies using their respective calculated Q-values

@@ -35,8 +35,9 @@ def path_to_project_root() -> pathlib.Path:
     return pathlib.Path(__file__).parent.parent.parent
 
 
-def load_configuration(config_path: Union[str, pathlib.Path] = "default_configuration.yaml") -> \
-        Config:
+def load_configuration(
+    config_path: Union[str, pathlib.Path] = "default_configuration.yaml"
+) -> Config:
     """
     Load the configuration settings from a YAML file.
 
