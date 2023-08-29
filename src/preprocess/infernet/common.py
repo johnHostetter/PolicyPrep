@@ -73,16 +73,17 @@ def build_model(max_ep_length: int, num_sas_features: int) -> Sequential:
     """
     model = Sequential()
     model.add(
-        TimeDistributed(Dense(256), input_shape=(max_ep_length, num_sas_features))
+        TimeDistributed(Dense(128), input_shape=(max_ep_length, num_sas_features))
     )
     model.add(LeakyReLU())
     model.add(Dropout(0.5))
-    model.add(TimeDistributed(Dense(256)))
+    model.add(TimeDistributed(Dense(128)))
     model.add(LeakyReLU())
     model.add(Dropout(0.5))
-    model.add(TimeDistributed(Dense(256)))
+    model.add(TimeDistributed(Dense(128)))
     model.add(LeakyReLU())
-    model.add(TimeDistributed(Dense(1)))
+    # output layer's dtype required to be tf.float32 if using mixed precision
+    model.add(TimeDistributed(Dense(1, dtype=tf.float32)))
     model.compile(loss=loss_function, optimizer=Adam(learning_rate=0.0001))
     return model
 
