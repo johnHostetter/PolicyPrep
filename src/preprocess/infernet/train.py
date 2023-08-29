@@ -10,7 +10,6 @@ from typing import Tuple, List
 
 import numpy as np
 import pandas as pd
-from numba import cuda
 import tensorflow as tf
 
 from YACS.yacs import Config
@@ -29,6 +28,13 @@ from src.utils.reproducibility import (
     set_random_seed,
     path_to_project_root,
 )
+
+# Automatic Mixed Precision: speeds up AI models ~ 3 times & helps w/ memory
+tf.keras.mixed_precision.set_global_policy("mixed_float16")
+# reduce the priority of TensorFlow for CPU usage to free up resources
+os.nice(10)
+# prevent TensorFlow from allocating too much memory at once
+os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
 
 def train_infer_net(problem_id: str) -> None:
@@ -164,7 +170,7 @@ def infernet_setup(problem_id: str) -> Tuple[bool, int, pd.DataFrame, np.ndarray
     """
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id
-    tf.keras.backend.set_floatx("float64")
+    tf.keras.backend.set_floatx("float32")  # float64 causes memory issues
     original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
     mdp_dataset = data_frame_to_d3rlpy_dataset(original_data, problem_id)
     user_ids = original_data["userID"].unique()
@@ -205,14 +211,7 @@ def train_step_level_models(
     Returns:
         None
     """
-    physical_devices = tf.config.list_physical_devices("GPU")
-    if increase_num_workers and len(physical_devices) > 0:
-        # temporarily limit the number of workers to the number of GPUs available
-        device = cuda.get_current_device()
-        num_workers = getattr(device, "MULTIPROCESSOR_COUNT", 1)
-    else:
-        num_workers = args.num_workers
-    with mp.Pool(processes=num_workers) as pool:
+    with mp.Pool(processes=args.num_workers) as pool:
         for problem_id in config.training.problems:
             print(f"Training the InferNet model for {problem_id}...")
             if problem_id not in config.training.skip.problems:
