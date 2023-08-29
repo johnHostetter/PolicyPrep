@@ -122,7 +122,7 @@ def evaluate_all_policies(config: Config = None) -> None:
     problems.extend(list(config.training.problems))
     # column_names = ['Policy Name', 'OPE', 'Value']  # Replace these with your desired column names
     # store_data = pd.DataFrame(columns=column_names)
-    for algo in config.training.algorithms:
+    for algorithm_str in config.training.algorithms:
         for problem_id in problems:
             if problem_id in config.training.skip.problems:
                 continue  # skip the problem; it is not used for training
@@ -130,17 +130,17 @@ def evaluate_all_policies(config: Config = None) -> None:
                 problem_id += "(w)"
             print(f"Evaluating the policy on {problem_id}...")
             evaluate_policy_with_importance_sampling(
-                policy_name=algo, problem_id=problem_id
+                policy_name=algorithm_str, problem_id=problem_id
             )
         directory_path = (
             path_to_project_root()
             / "data"
             / "for_policy_evaluation"
             / "for_analysis"
-            / algo
+            / algorithm_str
         )
         directory_path.mkdir(parents=True, exist_ok=True)
-        file_name = "data_analysis_.csv"
+        file_name = "data_analysis.csv"
         file_path = f"{directory_path}/{file_name}"
         store_data.to_csv(file_path)
         print(store_data)

@@ -31,7 +31,7 @@ def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
         config = load_configuration("default_configuration.yaml")
     problems = ["problem"]
     problems.extend(list(config.training.problems))
-    for algo in config.training.algorithms:
+    for algorithm_str in config.training.algorithms:
         for problem in problems:
             if problem not in config.training.skip.problems:
                 if "problem" in problem:
@@ -60,11 +60,15 @@ def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
                 dataset = pd.read_csv(str(path_to_pandas_data))
                 mdp_dataset = MDPDataset.load(str(path_to_d3rlpy_data))
                 # load the model and retrieve the implementation of the Q-function
+                alg = d3rlpy.algos.get_algo(algorithm_str, discrete=True)
                 path_to_model = (
-                    path_to_project_root() / "models" / "d3rlpy" / f"{problem}.pt"
+                    path_to_project_root()
+                    / "models"
+                    / "policies"
+                    / alg.__name__
+                    / "d3rlpy"
+                    / f"{problem}.pt"
                 )
-                alg = d3rlpy.algos.get_algo(algo, discrete=bool)
-
                 d3rlpy_algorithm = alg()
                 d3rlpy_algorithm.build_with_dataset(mdp_dataset)
                 d3rlpy_algorithm.load_model(str(path_to_model))
@@ -87,7 +91,10 @@ def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
                 )
                 results_df = pd.concat([dataset, q_values_df], axis=1)
                 path_to_output_directory = (
-                    path_to_project_root() / "data" / "for_policy_evaluation" / algo
+                    path_to_project_root()
+                    / "data"
+                    / "for_policy_evaluation"
+                    / algorithm_str
                 )
                 path_to_output_directory.mkdir(parents=True, exist_ok=True)
                 results_df.to_csv(

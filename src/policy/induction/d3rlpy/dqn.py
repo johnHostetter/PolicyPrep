@@ -65,7 +65,7 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
                     args=[
                         mdp_dataset,
                         problem_id,
-                        d3rlpy.algos.get_algo(algo, discrete=bool),
+                        d3rlpy.algos.get_algo(algo, discrete=True),
                     ],
                 )
         pool.close()
@@ -105,12 +105,7 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg) ->
         output_directory.mkdir(parents=True, exist_ok=True)
         if directory == "d3rlpy":
             # save the algorithm model to the output directory
-            algorithm.save_model(
-                str(
-                    output_directory
-                    / f"{problem_id}.pt"
-                )
-            )
+            algorithm.save_model(str(output_directory / f"{problem_id}.pt"))
         elif directory == "trace":
             # # save the traced model to the output directory (for use in the web app)
             # max_length = max([len(episode.observations) for episode in train_episodes])
