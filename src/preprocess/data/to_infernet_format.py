@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Tuple, Union, List, Callable
 
+import numpy as np
 import pandas as pd
 
 from YACS.yacs import Config
@@ -156,6 +157,7 @@ def convert_data_format(
         prob_features_df,
         substep_info_df,
         grades_df,
+        config
     )
     convert_step_level_format(
         output_directory,
@@ -278,6 +280,7 @@ def convert_problem_level_format(
     prob_features_df: pd.DataFrame,
     substep_info_df: pd.DataFrame,
     grades_df: pd.DataFrame,
+    config: Config
 ) -> None:
     """
     Convert the problem-level data to the format required by the training scripts.
@@ -288,6 +291,7 @@ def convert_problem_level_format(
         semester_name: The name of the semester, e.g. "S21".
         substep_info_df: The substep info dataframe.
         grades_df: The grades dataframe.
+        config: The configuration dictionary.
 
     Returns:
         None
@@ -330,10 +334,12 @@ def convert_problem_level_format(
                 except IndexError:
                     prob_lvl_feature_df.iat[i, action_col_location] = unique_actions
         else:
-            if len(grades_df[grades_df["userID"] == user_id]["nlg"].unique()) == 0:
+            user_nlgs: np.ndarray = grades_df[
+                grades_df["userID"] == user_id
+            ][config.data.grades.metric].unique()
+            if len(user_nlgs) == 0:
                 continue  # the result is empty list, skip this user
-            nlg = grades_df[grades_df["userID"] == user_id]["nlg"].unique()[0]
-            prob_lvl_feature_df.iat[i, reward_col_location] = nlg
+            prob_lvl_feature_df.iat[i, reward_col_location] = user_nlgs[0]
     # save the problem-level training data
     print(f"Saving problem-level training data for the {semester_name} semester...")
     prob_lvl_feature_df.to_csv(output_directory / "problem.csv", index=False)
