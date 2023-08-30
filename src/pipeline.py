@@ -295,6 +295,8 @@ if __name__ == "__main__":
     # load the configuration file
     config = load_configuration(args.config_file_path)
 
+    config.print(ignored_keys=())
+
     # download the data from the Google Drive folder into a subdirectory of the
     # data folder called "raw"
     if args.step == 1:
