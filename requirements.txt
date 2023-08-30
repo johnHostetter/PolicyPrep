@@ -86,7 +86,6 @@ Pygments==2.15.1
 pylint==2.17.4
 PyMySQL==1.1.0
 pyparsing==3.1.0
--e git+https://github.ncsu.edu/IUSE/Pyrenees-Pipeline@24ad188dc3f5923d7eb237c794d56054c99baebf#egg=Pyrenees_Pipeline
 PySocks==1.7.1
 python-dateutil==2.8.2
 pytz==2023.3
