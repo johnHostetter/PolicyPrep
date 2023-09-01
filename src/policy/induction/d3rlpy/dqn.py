@@ -201,7 +201,7 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
             np.array([reward for episode in test_episodes for reward in episode.rewards]),
             np.array(make_terminals(test_episodes)),
                    ),
-        n_epochs=10,
+        n_epochs=3,
         scorers={
             "td_error": td_error_scorer,
             "value_scale": average_value_estimation_scorer,
@@ -246,7 +246,7 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
             # algorithm.save_policy(str(output_directory / f"{problem_id}.onnx"))
             torch.onnx.export(
                 algorithm._impl._q_func.q_funcs[0],  # the trained Q-function is in the 0'th index
-                train_transitions[:250],
+                torch.randn(1, n_state).cuda() if torch.cuda.is_available() else torch.randn(1, n_state),
                 output_directory / f"{problem_id}.onnx", opset_version=11
             )
     print(f"Finished saving the {d3rlpy_alg.__name__} policy for {problem_id}...")
