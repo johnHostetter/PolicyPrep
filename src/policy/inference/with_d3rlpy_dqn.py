@@ -66,24 +66,39 @@ def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
                     / "models"
                     / "policies"
                     / alg.__name__
-                    / "d3rlpy"
-                    / f"{problem}.pt"
+                    / "onnx"
+                    / f"{problem}.onnx"
                 )
-                d3rlpy_algorithm = alg()
-                d3rlpy_algorithm.build_with_dataset(mdp_dataset)
-                d3rlpy_algorithm.load_model(str(path_to_model))
-                q_function_implementation = d3rlpy_algorithm._impl.q_function._q_funcs[
-                    0
-                ]
+                import onnxruntime as ort
+                q_function_implementation = ort.InferenceSession(
+                    path_to_model
+                )
+                # q_function_implementation = torch.jit.load(path_to_model)
 
                 # compute the Q-values for each state-action pair
-                q_values = (
-                    q_function_implementation(
-                        torch.tensor(dataset[list(state_features)].values).float()
-                    )
-                    .detach()
-                    .numpy()
+                path_to_norms = (
+                        path_to_project_root() / "data/normalization_values/{}.csv".format(problem)
                 )
+                import numpy as np
+                normalization_df = pd.read_csv(path_to_norms)
+                min_vectors = normalization_df.min_val.values.astype(np.float64)
+                max_vectors = normalization_df.max_val.values.astype(np.float64)
+                filter = max_vectors != min_vectors
+                from torch.utils.data import DataLoader
+                sample_data = torch.tensor(np.take(dataset[list(state_features)].values, np.where(filter)[0], axis=1)).float()
+                dataloader = DataLoader(sample_data, batch_size=1)
+                q_values = []
+                for batch in dataloader:
+                    q_values.append(
+                        q_function_implementation.run(
+                            None,
+                            {"x.1": batch.detach().numpy().astype(np.float32)}
+                        )[0]
+                        # .cpu()
+                        # .detach()
+                        # .numpy()
+                    )
+                q_values = np.squeeze(np.array(q_values), axis=1)
                 # TODO: check that the Q-values are correct for each action
                 q_values_df = pd.DataFrame(
                     q_values,
