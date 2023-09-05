@@ -92,6 +92,9 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     """
     train_episodes, test_episodes = train_test_split(mdp_dataset, test_size=0.2)
 
+    # train_episodes = train_episodes[:10]
+    # test_episodes = test_episodes[:10]
+
     import soft.computing.blueprints
     from soft.computing.wrappers import CustomEncoderFactory as SoftEncoderFactory
 
@@ -114,7 +117,12 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
         soft_config.fuzzy.t_norm.yager = w_parameter
         soft_config.fuzzy.rough.compatibility = False
         soft_config.output.name = path_to_project_root() / "figures" / "FYD" / d3rlpy_alg.__name__ / problem_id
-        soft_config.clustering.distance_threshold = 0.2
+        soft_config.clustering.distance_threshold = 0.17
+        soft_config.training.epochs = 300
+        soft_config.training.learning_rate = 3e-4
+        soft_config.fuzzy.t_norm.yager = np.e
+        soft_config.fuzzy_antecedents_generation.alpha = 0.1
+        soft_config.fuzzy_antecedents_generation.beta = 0.7
     soft_config.output.name.mkdir(parents=True, exist_ok=True)
     print(f"Using device: {soft_config.device}")
 
@@ -139,10 +147,15 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     torch.cuda.empty_cache()
 
     knowledge_base = self_organize.start()
-
+    fuzzy_rules = knowledge_base.get_fuzzy_logic_rules()
+    premises = [len(fuzzy_rule.premise) for fuzzy_rule in fuzzy_rules]
     print(
         f"Solving the system with "
-        f"{len(knowledge_base.get_fuzzy_logic_rules())} rules."
+        f"{len(fuzzy_rules)} rules."
+    )
+    print(
+        f"Average (std. dev.) premises is "
+        f"{np.mean(premises)} ({np.std(premises)})"
     )
     if problem_id == "problem":
         n_action = len(config.training.actions.problem)
@@ -166,7 +179,8 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     print(f"Training a {d3rlpy_alg.__name__} policy for {problem_id}...")
     algorithm = d3rlpy_alg(
         encoder_factory=encoder_factory,
-        use_gpu=torch.cuda.is_available()
+        use_gpu=torch.cuda.is_available(),
+        batch_size=32
     )
 
     def make_terminals(episodes: List[Episode]) -> List[int]:
@@ -188,29 +202,46 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
             terminals[-1] = 1
         return terminals
 
+    path_to_logs = path_to_project_root() / "logs" / d3rlpy_alg.__name__ / problem_id
+    path_to_logs.mkdir(parents=True, exist_ok=True)
+
     algorithm.fit(
         MDPDataset(
             train_transitions.detach().numpy(),
             np.array([action for episode in train_episodes for action in episode.actions]),
             np.array([reward for episode in train_episodes for reward in episode.rewards]),
             np.array(make_terminals(train_episodes)),
-                   ),
+        ),
         eval_episodes=MDPDataset(
             test_transitions.detach().numpy(),
             np.array([action for episode in test_episodes for action in episode.actions]),
             np.array([reward for episode in test_episodes for reward in episode.rewards]),
             np.array(make_terminals(test_episodes)),
-                   ),
-        n_epochs=3,
+        ),
+        n_epochs=100,
+        logdir=str(path_to_logs),
         scorers={
             "td_error": td_error_scorer,
             "value_scale": average_value_estimation_scorer,
         },
     )
     print(f"Finished training a {d3rlpy_alg.__name__} policy for {problem_id}...")
+
+    # from d3rlpy.ope import DiscreteFQE
+    #
+    # fqe = DiscreteFQE(algo=algorithm)
+    # from d3rlpy.metrics.scorer import initial_state_value_estimation_scorer
+    # from d3rlpy.metrics.scorer import soft_opc_scorer
+    #
+    # fqe.fit(train_episodes, eval_episodes=test_episodes, n_epochs=12,
+    #         scorers={
+    #             "init_value": initial_state_value_estimation_scorer,
+    #             "soft_opc": soft_opc_scorer(return_threshold=600)
+    #         })
+
     # make the directory if it does not exist already and save the model
     print(f"Saving the {d3rlpy_alg.__name__} policy for {problem_id}...")
-    for directory in ["d3rlpy", "trace", "onnx"]:
+    for directory in ["d3rlpy", "trace", "onnx", "pysoft"]:
         output_directory = path_to_project_root() / "models" / "policies"
         output_directory = output_directory / d3rlpy_alg.__name__ / directory
         output_directory.mkdir(parents=True, exist_ok=True)
@@ -239,6 +270,8 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
 
             # save greedy-policy as TorchScript
             algorithm.save_policy(str(output_directory / f"{problem_id}.pt"))
+        elif directory == "pysoft":
+            knowledge_base.save(str(output_directory / f"{problem_id}"))
         else:
             # save greedy-policy as ONNX
             if torch.cuda.is_available():
