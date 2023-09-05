@@ -91,13 +91,20 @@ def train_infer_net(problem_id: str) -> None:
     num_state_and_actions = len(state_features) + len(possible_actions)
     print(f"{problem_id}: Max episode length is {max_len}")
 
-    model = build_model(max_len, len(state_features) + len(possible_actions))
+    model, optimizer = build_model(max_len, len(state_features) + len(possible_actions))
 
     # Train the InferNet model
     print("#####################")
     start_time = time.time()
     losses = []
     for iteration in range(config.training.data.num_iterations + 1):
+        # if iteration < 810000:
+        #     continue
+        # elif iteration == 810000:
+        #     checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+        #     path_to_checkpoints = path_to_project_root() / "models" / "infernet" / "checkpoints"
+        #     checkpoint.restore(path_to_checkpoints / f"{problem_id}_{iteration}-1")
+        # else:
         batch = random.sample(infer_buffer, config.training.data.batch_size)
         states_actions, _, _, imm_rew_sum, _ = list(zip(*batch))
         states_actions = np.reshape(
@@ -149,7 +156,11 @@ def train_infer_net(problem_id: str) -> None:
             path_to_models = path_to_project_root() / "models" / "infernet"
             path_to_models.mkdir(parents=True, exist_ok=True)
             model.save(path_to_models / f"{problem_id}_{iteration}.h5")
-
+            # save a checkpoint, to restore model weights and optimizer settings if training fails
+            path_to_checkpoints = path_to_project_root() / "models" / "infernet" / "checkpoints"
+            path_to_checkpoints.mkdir(parents=True, exist_ok=True)
+            checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+            checkpoint.save(path_to_checkpoints / f"{problem_id}_{iteration}")
     print(f"Done training InferNet for {problem_id}.")
 
 
@@ -211,13 +222,14 @@ def train_step_level_models(
     Returns:
         None
     """
-    with mp.Pool(processes=args.num_workers) as pool:
-        for problem_id in config.training.problems:
-            print(f"Training the InferNet model for {problem_id}...")
-            if problem_id not in config.training.skip.problems:
-                pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
-        pool.close()
-        pool.join()
+    # with mp.Pool(processes=args.num_workers) as pool:
+    for problem_id in config.training.problems:
+        print(f"Training the InferNet model for {problem_id}...")
+        if problem_id not in config.training.skip.problems:
+            train_infer_net(f"{problem_id}(w)")
+                # pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
+        # pool.close()
+        # pool.join()
     print("All processes finished for training step-level InferNet models.")
 
 
