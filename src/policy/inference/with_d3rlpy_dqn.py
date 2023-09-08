@@ -86,9 +86,13 @@ def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
                 filter = max_vectors != min_vectors
                 from torch.utils.data import DataLoader
                 sample_data = torch.tensor(np.take(dataset[list(state_features)].values, np.where(filter)[0], axis=1)).float()
+                print(problem)
+                print(f"shape of data: {sample_data.shape}")
                 dataloader = DataLoader(sample_data, batch_size=1)
                 q_values = []
-                for batch in dataloader:
+                for idx, batch in enumerate(dataloader):
+                    if idx % 5000 == 0:
+                        print(idx)
                     q_values.append(
                         q_function_implementation.run(
                             None,
