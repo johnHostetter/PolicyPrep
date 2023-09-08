@@ -116,12 +116,12 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
             w_parameter = float(soft_config.fuzzy.t_norm.yager)
         soft_config.fuzzy.t_norm.yager = w_parameter
         soft_config.fuzzy.rough.compatibility = False
-        soft_config.output.name = path_to_project_root() / "figures" / "FYD" / d3rlpy_alg.__name__ / problem_id
+        soft_config.output.name = path_to_project_root() / "figures" / "CEW" / d3rlpy_alg.__name__ / problem_id
         soft_config.clustering.distance_threshold = 0.17
         soft_config.training.epochs = 300
         soft_config.training.learning_rate = 3e-4
         soft_config.fuzzy.t_norm.yager = np.e
-        soft_config.fuzzy_antecedents_generation.alpha = 0.1
+        soft_config.fuzzy_antecedents_generation.alpha = 0.2
         soft_config.fuzzy_antecedents_generation.beta = 0.7
     soft_config.output.name.mkdir(parents=True, exist_ok=True)
     print(f"Using device: {soft_config.device}")
@@ -137,9 +137,9 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     mask = min_values != max_values
     train_transitions = torch.tensor(train_transitions[:, mask])
     test_transitions = torch.tensor(test_transitions[:, mask])
-    self_organize = soft.computing.blueprints.clip_frequent_discernible(
+    self_organize = soft.computing.blueprints.clip_ecm_wm(
         train_transitions,
-        test_transitions,
+        # test_transitions,
         config=soft_config
     )
 
@@ -147,6 +147,13 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     torch.cuda.empty_cache()
 
     knowledge_base = self_organize.start()
+    # path_to_kb_dirs = path_to_project_root() / "models" / "policies" / d3rlpy_alg.__name__ / "pysoft" / problem_id
+    # path_to_kb = list(path_to_kb_dirs.glob("*"))[-1]  # get the last entry
+    # from soft.computing.knowledge import KnowledgeBase
+    # knowledge_base = KnowledgeBase.load(path_to_kb)
+    #
+    # # update the config for the knowledge_base
+    # knowledge_base.config = load_configuration()  # just load default
     fuzzy_rules = knowledge_base.get_fuzzy_logic_rules()
     premises = [len(fuzzy_rule.premise) for fuzzy_rule in fuzzy_rules]
     print(
@@ -180,7 +187,9 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     algorithm = d3rlpy_alg(
         encoder_factory=encoder_factory,
         use_gpu=torch.cuda.is_available(),
-        batch_size=32
+        learning_rate=3e-4,
+        batch_size=32,
+        # alpha=0.1
     )
 
     def make_terminals(episodes: List[Episode]) -> List[int]:
@@ -241,7 +250,7 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
 
     # make the directory if it does not exist already and save the model
     print(f"Saving the {d3rlpy_alg.__name__} policy for {problem_id}...")
-    for directory in ["d3rlpy", "trace", "onnx", "pysoft"]:
+    for directory in ["d3rlpy", "trace", "pysoft", "onnx"]:
         output_directory = path_to_project_root() / "models" / "policies"
         output_directory = output_directory / d3rlpy_alg.__name__ / directory
         output_directory.mkdir(parents=True, exist_ok=True)
@@ -277,8 +286,10 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
             if torch.cuda.is_available():
                 train_transitions = train_transitions.cuda()
             # algorithm.save_policy(str(output_directory / f"{problem_id}.onnx"))
+            model = algorithm._impl._q_func.q_funcs[0]
+            model.eval()
             torch.onnx.export(
-                algorithm._impl._q_func.q_funcs[0],  # the trained Q-function is in the 0'th index
+                model,  # the trained Q-function is in the 0'th index
                 torch.randn(1, n_state).cuda() if torch.cuda.is_available() else torch.randn(1, n_state),
                 output_directory / f"{problem_id}.onnx", opset_version=11
             )
