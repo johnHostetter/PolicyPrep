@@ -88,6 +88,9 @@ def iterate_over_semester_data(
         (_, semester_name) = semester_folder.name.split(" - ")
         print(f"Processing data for the {semester_name} semester...")
 
+        if semester_name not in ["S23"]:
+            continue
+
         try:
             function_to_perform(semester_folder, semester_name, config)
         except FileNotFoundError as file_not_found_error:
@@ -390,11 +393,69 @@ def convert_step_level_format(
         ]
 
         # Feature Frame has an extra "probEnd" per problem per user.
-        # Since we are at the current problem, it has an additional #NumberofUser rows
+        # Since we are at the current problem, it has an additional # of user rows
         if len(step_lvl_feature_df) != len(step_lvl_substep_df) + len(user_ids):
-            print("feature_all and substep_info length mismatch at step-level")
-            continue
-            # sys.exit(1)
+            new_step_lvl_substep_df: List[pd.DataFrame] = []
+            new_step_lvl_feature_df: List[pd.DataFrame] = []
+            print(
+                f"{problem}: The feature and sub-step data size mismatch at the step-level."
+            )
+            # attempt to resolve the conflict/discrepancies
+            for user_id in user_ids:  # step through user-by-user, some issues can be w/ only 1 user
+                # get the user's corresponding data
+                tmp_user_step_lvl_substep_df = step_lvl_substep_df[
+                    step_lvl_substep_df["userID"] == user_id
+                ]
+                tmp_user_step_lvl_feature_df = step_lvl_feature_df[
+                    step_lvl_feature_df["userID"] == user_id
+                ]
+                # one issue with past data (e.g., S23, F23) is repeated row entries - meaning, that
+                # there are multiple probEnd rows for the same problem, given a specific user
+                # this is problematic as there should only be ONE
+                decision_point_indices: List[int] = [
+                    decision_point_index for decision_point_index, decision_point in enumerate(
+                        tmp_user_step_lvl_feature_df.decisionPoint.to_list()
+                    )
+                    if decision_point == "probEnd"
+                ]  # this code goes through and finds the data indices where probEnd occurs
+                # slice the user's data to only keep the first entries up until the first probEnd
+                tmp_user_step_lvl_substep_df: pd.DataFrame = tmp_user_step_lvl_substep_df.iloc[
+                                                             0:decision_point_indices[0]
+                                                             ]  # no + 1 needed (no probEnd row)
+                tmp_user_step_lvl_feature_df: pd.DataFrame = tmp_user_step_lvl_feature_df.iloc[
+                                                             0:(decision_point_indices[0] + 1)
+                                                             ]  # the + 1 includes our probEnd row
+
+                # check that the user's data is the size that we expect
+                if len(tmp_user_step_lvl_substep_df) + 1 == len(tmp_user_step_lvl_feature_df):
+                    # if it is, keep it
+                    new_step_lvl_substep_df.append(tmp_user_step_lvl_substep_df)
+                    new_step_lvl_feature_df.append(tmp_user_step_lvl_feature_df)
+                else:  # otherwise, we can't seem to use this user's data - something bad happened
+                    # the current user has insufficient data logged (e.g., S23 user 231228)
+                    print(
+                        f"Skipping user {user_id}... invalid data."
+                    )  # NOTE: this isn't a common occurrence, between S23 & F23, this happened ONCE
+
+            # override the variables
+            step_lvl_substep_df: pd.DataFrame = pd.concat(objs=new_step_lvl_substep_df)
+            step_lvl_feature_df: pd.DataFrame = pd.concat(objs=new_step_lvl_feature_df)
+            user_ids = step_lvl_substep_df["userID"].unique().tolist()
+
+            if len(step_lvl_feature_df) != len(step_lvl_substep_df) + len(user_ids):
+                raise ValueError(
+                    "Failed to resolve mismatch between feature and sub-step information. "
+                    "Error is safe to ignore if this dataset can be ignored. "
+                    "The error is thrown as a precaution to catch your attention!"
+                )  # this error is thrown as features_info and substep_info data mismatch
+                # obviously, this is rather undesirable (means there is some issue in data logging)
+                # typically, this will only be thrown on newer data, which you most likely want to
+                # use in your experiment study
+                # you will have to dig into the data to find out what happened and where the
+                # discrepancies lie, for example, semesters S23 and F23 had duplicate data rows
+                # good luck! :)
+            else:
+                print("Mismatch and conflicts resolved between feature and sub-step information!")
 
         sub_step_counter = 0
         for i in range(len(step_lvl_feature_df)):
