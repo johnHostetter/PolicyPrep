@@ -49,10 +49,29 @@ def minimum_id(semester: str) -> int:
     return year_int + semester_int + 100
 
 
+def add_users_to_skip_list(user_ids: List[int], config: Config) -> None:
+    """
+    Append the given list of user IDs to the configuration file's list of users that
+    should be skipped in later steps of the pre-processing pipeline. Modifies the configuration
+    settings in-place.
+
+    Args:
+        user_ids: A list of user IDs that should be added to the skipped group.
+        config: The configuration settings.
+
+    Returns:
+        The modified configuration settings.
+    """
+    with config.unfreeze():
+        config.training.skip.users = tuple(
+            list(config.training.skip.users) + user_ids
+        )
+
+
 def iterate_over_semester_data(
     subdirectory: str,
-    config_file: Config,
     function_to_perform: Callable[[Path, str, Config], None],
+    config: Config,
 ) -> None:
     """
     Iterate over the different semesters of training data and generate the training data with action
@@ -60,20 +79,19 @@ def iterate_over_semester_data(
 
     Args:
         subdirectory: The subdirectory of the data folder to iterate over.
-        config_file: The configuration file to use
         function_to_perform: The function to perform on each semester folder.
+        config: The configuration file to use
 
     Returns:
         None
     """
     # load the configuration settings
     pd.options.mode.chained_assignment = None
-    config = config_file
 
     # iterate over the different semesters of training data
 
     semester_folder_path_generator = (
-        path_to_project_root() / "data" / subdirectory
+            path_to_project_root() / "data" / subdirectory
     ).glob("* - *")
     for semester_folder in semester_folder_path_generator:
         if not semester_folder.is_dir():
@@ -87,9 +105,6 @@ def iterate_over_semester_data(
         # e.g. "10 - S21" -> "S21"; the part before the " - " is the folder ordering number
         (_, semester_name) = semester_folder.name.split(" - ")
         print(f"Processing data for the {semester_name} semester...")
-
-        if semester_name not in ["S23"]:
-            continue
 
         try:
             function_to_perform(semester_folder, semester_name, config)
@@ -137,7 +152,6 @@ def convert_data_format(
         "with_delayed_rewards", semester_folder.name
     )
     # get the problems for the semester
-    problems = get_problems(substep_info_df)
     # need to prepare problem-level training data with action and reward columns
     prob_features_df = get_features_dataframe(
         semester_folder,
@@ -152,6 +166,7 @@ def convert_data_format(
         semester_int,
         columns=config.data.features.basic + config.data.features.step,
     )
+
     # convert the data to the format required by the training scripts
     convert_problem_level_format(
         output_directory,
@@ -159,13 +174,14 @@ def convert_data_format(
         prob_features_df,
         substep_info_df,
         grades_df,
+        config
     )
     convert_step_level_format(
         output_directory,
         semester_name,
         step_features_df,
         substep_info_df,
-        problems,
+        config
     )
 
 
@@ -213,7 +229,8 @@ def get_features_dataframe(
 
 def get_problems(substep_info_df: pd.DataFrame) -> List[str]:
     """
-    Get the problems for the semester.
+    Get the problems for the semester (excluding the problem IDs where the tutor does not make
+    a pedagogical decision, such as ex222).
 
     Args:
         substep_info_df: The substep info dataframe.
@@ -226,9 +243,9 @@ def get_problems(substep_info_df: pd.DataFrame) -> List[str]:
         problem_id
         for problem_id in problems
         if (
-            problem_id[-1] != "w"
-            and "ex222" not in problem_id
-            and "ex144" not in problem_id
+                problem_id[-1] != "w"
+                and "ex222" not in problem_id
+                and "ex144" not in problem_id
         )
     ]  # exclude word problems and ex222 and ex144 which won't be trained for step-level
     return problems
@@ -281,6 +298,7 @@ def convert_problem_level_format(
     prob_features_df: pd.DataFrame,
     substep_info_df: pd.DataFrame,
     grades_df: pd.DataFrame,
+    config: Config
 ) -> None:
     """
     Convert the problem-level data to the format required by the training scripts.
@@ -291,16 +309,17 @@ def convert_problem_level_format(
         semester_name: The name of the semester, e.g. "S21".
         substep_info_df: The substep info dataframe.
         grades_df: The grades dataframe.
+        config: The configuration settings.
 
     Returns:
         None
     """
     prob_features_df = prob_features_df[
         prob_features_df["userID"] >= minimum_id(semester_name)
-    ]
+        ]
     substep_info_df = substep_info_df[
         substep_info_df["userID"] >= minimum_id(semester_name)
-    ]
+        ]
     prob_lvl_feature_df = prob_features_df[
         prob_features_df["decisionPoint"].isin(["probStart", "probEnd"])
     ]
@@ -308,9 +327,30 @@ def convert_problem_level_format(
         prob_lvl_feature_df[
             (prob_lvl_feature_df["decisionPoint"] == "probEnd")
             & (~prob_lvl_feature_df["problem"].isin(["ex252", "ex252w"]))
-        ].index,
+            ].index,
         inplace=True,
     )
+
+    # eliminate duplicate row entries, with respect to the selected columns (e.g., "time")
+    # for example, problem-level data from F23 has duplicate row entries
+    prob_lvl_feature_df = prob_lvl_feature_df.drop_duplicates(
+        ["userID", "problem", "time", "decisionPoint"]
+    )
+
+    # eliminate the data that has an insufficient number of row entries
+    grouped_by_user_prob_lvl_features_df: List[pd.DataFrame] = [
+        group for _, group in prob_lvl_feature_df.groupby(by="userID")
+        if len(group) == (len(config.training.problems) + 1)  # the + 1 accounts for the probEnd row
+    ]
+    # save the users that have insufficient data associated with them
+    user_ids_to_be_removed: List[int] = [
+        int(user_id) for user_id, group in prob_lvl_feature_df.groupby(by="userID")
+        if len(group) < (len(config.training.problems) + 1)  # the + 1 accounts for the probEnd row
+    ]
+    # mark these users to be skipped later
+    add_users_to_skip_list(user_ids_to_be_removed, config)
+    # overwrite the previous variable reference
+    prob_lvl_feature_df: pd.DataFrame = pd.concat(grouped_by_user_prob_lvl_features_df)
 
     prob_lvl_feature_df["action"] = ""
     prob_lvl_feature_df["reward"] = ""
@@ -324,7 +364,7 @@ def convert_problem_level_format(
             unique_actions = substep_info_df[
                 (substep_info_df["userID"] == user_id)
                 & (substep_info_df["problem"] == problem)
-            ]["substepMode"].unique()
+                ]["substepMode"].unique()
             if len(unique_actions) == 2:
                 prob_lvl_feature_df.iat[i, action_col_location] = "step_decision"
             else:
@@ -347,7 +387,7 @@ def convert_step_level_format(
     semester_name: str,
     step_features_df: pd.DataFrame,
     substep_info_df: pd.DataFrame,
-    problems: List[str],
+    config: Config
 ) -> None:
     """
     Converts the step-level data into the format that can be used for training the step-level
@@ -358,16 +398,18 @@ def convert_step_level_format(
         semester_name: The name of the semester.
         step_features_df: The step-level features dataframe.
         substep_info_df: The substep info dataframe.
-        problems: The list of problems.
+        config: The configuration settings.
 
     Returns:
         None
     """
+    # get the problems for the semester
+    problems: List[str] = get_problems(substep_info_df)
     for problem in problems:
         step_lvl_feature_df = step_features_df[
             (step_features_df["decisionPoint"].isin(["stepStart", "probEnd"]))
             & (step_features_df["problem"].isin([problem, problem + "w"]))
-        ]
+            ]
         step_lvl_feature_df["action"] = ""
         step_lvl_feature_df["reward"] = ""
         action_col_location = step_lvl_feature_df.columns.get_loc("action")
@@ -379,9 +421,17 @@ def convert_step_level_format(
         user_ids = set(step_lvl_feature_df.userID.unique()).intersection(
             step_lvl_substep_df.userID.unique()
         )
-        # user IDs below 100 are considered test users, remove them
+        # find users that have insufficient data associated with them
+        user_ids_to_be_removed: List[int] = [
+            int(user_id) for user_id, group in step_lvl_feature_df.groupby(by="userID")
+            if "probEnd" not in group.decisionPoint.unique()
+        ]  # e.g., user 183114 from F18
+        # mark these users to be skipped later
+        add_users_to_skip_list(user_ids_to_be_removed, config)
+        # user IDs below 100 are considered test users - remove them, as well as other 'bad' users
         user_ids = [
-            user_id for user_id in user_ids if user_id >= minimum_id(semester_name)
+            user_id for user_id in user_ids
+            if user_id >= minimum_id(semester_name) or user_id not in user_ids_to_be_removed
         ]
 
         # make them consistent with each other
@@ -405,10 +455,10 @@ def convert_step_level_format(
                 # get the user's corresponding data
                 tmp_user_step_lvl_substep_df = step_lvl_substep_df[
                     step_lvl_substep_df["userID"] == user_id
-                ]
+                    ]
                 tmp_user_step_lvl_feature_df = step_lvl_feature_df[
                     step_lvl_feature_df["userID"] == user_id
-                ]
+                    ]
                 # one issue with past data (e.g., S23, F23) is repeated row entries - meaning, that
                 # there are multiple probEnd rows for the same problem, given a specific user
                 # this is problematic as there should only be ONE
@@ -474,7 +524,6 @@ def convert_step_level_format(
                     + str(user_id_substep)
                 )
                 continue
-                # sys.exit(1)
 
             step_lvl_feature_df.iat[i, action_col_location] = step_lvl_substep_df.iloc[
                 sub_step_counter
@@ -489,6 +538,9 @@ def convert_step_level_format(
 
 
 if __name__ == "__main__":
+    # example usage
     iterate_over_semester_data(
-        subdirectory="raw", function_to_perform=convert_data_format
+        subdirectory="raw",
+        function_to_perform=convert_data_format,
+        config=load_configuration("default_configuration.yaml")
     )
