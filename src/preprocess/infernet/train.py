@@ -119,7 +119,7 @@ def train_infer_net(problem_id: str) -> None:
         )
         imm_rew_sum = np.reshape(imm_rew_sum, (config.training.data.batch_size, 1))
         predicted_immediate_rewards = model(torch.Tensor(states_actions))
-        loss = criterion(predicted_immediate_rewards.sum(dim=0), torch.Tensor(imm_rew_sum))
+        loss = criterion(predicted_immediate_rewards.sum(dim=1), torch.Tensor(imm_rew_sum))
         optimizer.zero_grad()
         loss.backward()
         if iteration % 10000 == 0:
@@ -133,46 +133,51 @@ def train_infer_net(problem_id: str) -> None:
         # )
         # loss = hist.history["loss"][0]
         losses.append(loss.item())
-        # if iteration > 0 and iteration % config.training.data.checkpoint == 0:
-        #     print(
-        #         f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}"
-        #     )
-        #     print("Training time is", time.time() - start_time, "seconds")
-        #     start_time = time.time()
-        #
-        #     # Infer the rewards for the data and save the data.
-        #     if is_problem_level:
-        #         state_feature_columns = config.data.features.problem
-        #     else:
-        #         state_feature_columns = config.data.features.step
-        #
-        #     infer_and_save_rewards(
-        #         problem_id,
-        #         iteration,
-        #         infer_buffer,
-        #         max_len,
-        #         model,
-        #         state_feature_columns,
-        #         num_state_and_actions,
-        #         is_problem_level=is_problem_level,
-        #     )
-        #
-        #     loss_df = pd.DataFrame({"loss": losses})
-        #     # save the loss data to generate the loss plot
-        #     path_to_figures = path_to_project_root() / "figures"
-        #     path_to_figures.mkdir(parents=True, exist_ok=True)
-        #     loss_df.to_csv(
-        #         path_to_figures / f"loss_{problem_id}_{iteration}.csv", index=False
-        #     )
-        #     # save the model
-        #     path_to_models = path_to_project_root() / "models" / "infernet"
-        #     path_to_models.mkdir(parents=True, exist_ok=True)
-        #     model.save(path_to_models / f"{problem_id}_{iteration}.h5")
-        #     # save a checkpoint, to restore model weights and optimizer settings if training fails
-        #     path_to_checkpoints = path_to_project_root() / "models" / "infernet" / "checkpoints"
-        #     path_to_checkpoints.mkdir(parents=True, exist_ok=True)
-        #     checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
-        #     checkpoint.save(path_to_checkpoints / f"{problem_id}_{iteration}")
+        if iteration > 0 and iteration % config.training.data.checkpoint == 0:
+            print(
+                f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}"
+            )
+            print("Training time is", time.time() - start_time, "seconds")
+            start_time = time.time()
+
+            # Infer the rewards for the data and save the data.
+            if is_problem_level:
+                state_feature_columns = config.data.features.problem
+            else:
+                state_feature_columns = config.data.features.step
+
+            infer_and_save_rewards(
+                problem_id,
+                iteration,
+                infer_buffer,
+                max_len,
+                model,
+                state_feature_columns,
+                num_state_and_actions,
+                is_problem_level=is_problem_level,
+            )
+
+            loss_df = pd.DataFrame({"loss": losses})
+            # save the loss data to generate the loss plot
+            path_to_figures = path_to_project_root() / "figures"
+            path_to_figures.mkdir(parents=True, exist_ok=True)
+            loss_df.to_csv(
+                path_to_figures / f"loss_{problem_id}_{iteration}.csv", index=False
+            )
+            # save the model
+            path_to_models = path_to_project_root() / "models" / "infernet"
+            path_to_models.mkdir(parents=True, exist_ok=True)
+            torch.save(model, path_to_models / f"{problem_id}_{iteration}.pt")
+            # model.save(path_to_models / f"{problem_id}_{iteration}.h5")
+            # save a checkpoint, to restore model weights and optimizer settings if training fails
+            path_to_checkpoints = path_to_project_root() / "models" / "infernet" / "checkpoints"
+            path_to_checkpoints.mkdir(parents=True, exist_ok=True)
+            torch.save(
+                {"model": model.state_dict(), "optimizer": optimizer.state_dict()},
+                path_to_checkpoints / f"{problem_id}_{iteration}.pt"
+            )  # we can use a dictionary to save any arbitrary information (e.g., lr_scheduler)
+            # checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+            # checkpoint.save(path_to_checkpoints / f"{problem_id}_{iteration}")
     print(f"Done training InferNet for {problem_id}.")
 
 
@@ -188,9 +193,8 @@ def infernet_setup(problem_id: str, config: Config) -> Tuple[bool, MDPDataset, p
     Returns:
         A tuple containing the following:
             is_problem_level: A boolean indicating if the data is problem-level or step-level.
-            max_len: The maximum episode length.
-            original_data: The original data.
-            user_ids: The user IDs.
+            mdp_dataset: The MDPDataset representation where the state features are normalized.
+            normalized_data: The normalized dataset.
     """
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id
@@ -204,8 +208,6 @@ def infernet_setup(problem_id: str, config: Config) -> Tuple[bool, MDPDataset, p
         original_data, problem_id, columns_to_normalize=state_features
     )
     mdp_dataset = data_frame_to_d3rlpy_dataset(normalized_data, problem_id)
-    # user_ids = original_data["userID"].unique()
-    # max_len = calc_max_episode_length(mdp_dataset)
     return is_problem_level, mdp_dataset, normalized_data
 
 

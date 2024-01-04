@@ -103,8 +103,7 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
         path_to_project_root() / "PySoft" / "configurations" / "default_configuration.yaml"
     )
 
-    # change default pyd
-    # evice for PyTorch to use the GPU if it is available
+    # change default device for PyTorch to use the GPU if it is available
     device = "cpu"
     torch.set_default_device("cpu")
     with soft_config.unfreeze():
@@ -215,6 +214,16 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     path_to_logs = path_to_project_root() / "logs" / d3rlpy_alg.__name__ / problem_id
     path_to_logs.mkdir(parents=True, exist_ok=True)
 
+    # algorithm.fit(
+    #     train_episodes,
+    #     eval_episodes=test_episodes,
+    #     n_epochs=100,
+    #     logdir=str(path_to_logs),
+    #     scorers={
+    #         "td_error": td_error_scorer,
+    #         "value_scale": average_value_estimation_scorer,
+    #     },
+    # )
     algorithm.fit(
         MDPDataset(
             train_transitions.detach().numpy(),

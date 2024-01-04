@@ -4,7 +4,7 @@ This script is used to propagate the rewards from the problem level to the step 
 import multiprocessing as mp
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 import pandas as pd
 
 from YACS.yacs import Config
@@ -60,29 +60,32 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
         ).glob("*(w).csv")
     )  # find all the .csv files in the directory that end with "(w).csv"
 
-    with mp.Pool(processes=num_workers) as pool:
-        for file in exercise_file_path_generator:
-            if file.is_dir():
-                print(f"Skipping {file.name} (it is a directory)...")
-                continue
+    # with mp.Pool(processes=num_workers) as pool:
+    for file in exercise_file_path_generator:
+        if file.is_dir():
+            print(f"Skipping {file.name} (it is a directory)...")
+            continue
 
-            step_data = read_data(
-                file.name,
-                subdirectory="for_propagating_rewards",
-                selected_users=user_list,
-            )
+        step_data = read_data(
+            file.name,
+            subdirectory="for_propagating_rewards",
+            selected_users=user_list,
+        )
 
-            pool.apply_async(
-                propagate_problem_reward_to_step_level_data,
-                args=(
-                    config,
-                    file,
-                    step_data,
-                    user_problem_reward,
-                ),
-            )
-        pool.close()
-        pool.join()
+        # pool.apply_async(
+        #     propagate_problem_reward_to_step_level_data,
+        #     args=(
+        #         config,
+        #         file,
+        #         step_data,
+        #         user_problem_reward,
+        #     ),
+        # )
+        propagate_problem_reward_to_step_level_data(
+            config, file, step_data, user_problem_reward
+        )
+    # pool.close()
+    # pool.join()
 
     print(
         "Problem-level rewards have been propagated to all step-level data. "
@@ -100,13 +103,14 @@ def propagate_problem_reward_to_step_level_data(
     Propagate the rewards from the problem level to the step level. This function is
     called by the `propagate_problem_level_rewards_to_step_level` function. It is
     called in parallel for each exercise. The function modifies the `step_data`
-    DataFrame in-place. The `step_data` Loaded runtime CuDNN library: 8.5.0 but source was compiled with: 8.6.0.  CuDNN library needs to have matching major version and equal or higher minor version.DataFrame is saved to the appropriate
-    subdirectory.
+    DataFrame in-place. The `step_data` DataFrame is saved to the appropriate subdirectory.
+
     Args:
         config: The configuration file.
         file: The path to the step-level data.
         step_data: The step-level data.
         user_problem_reward: A dictionary of the form {user_id: {problem: reward}}.
+
     Returns:
         None
     """
@@ -122,7 +126,8 @@ def propagate_problem_reward_to_step_level_data(
             or len(user_problem_reward[user].keys()) != len(config.training.problems)
         ):
             continue
-        for problem in config.training.problems:
+        problems_answered_by_user: List[str] = list(user_problem_reward[user].keys())
+        for problem in problems_answered_by_user:
             if problem in config.training.skip.problems:
                 continue  # skip the problem; it is not used for training
             nn_inferred_reward = user_problem_reward[user][problem]

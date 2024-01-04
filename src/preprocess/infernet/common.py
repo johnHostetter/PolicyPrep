@@ -85,7 +85,7 @@ def build_model(max_ep_length: int, num_sas_features: int) -> (TimeDistributed, 
         torch.nn.Linear(in_features=256, out_features=1, bias=True),
     )
 
-    model = TimeDistributed(module=neural_network)
+    model = TimeDistributed(module=neural_network, batch_first=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-5)  # the 'lr' is learning rate
     return model, optimizer
 
@@ -328,8 +328,9 @@ def infer_and_save_rewards(
     batch_lengths = np.array(batch_lengths)
 
     # Perform batched predictions
-    inf_rews = model.predict(batch_states_actions, batch_size=32, verbose=0)
-    inf_rews = tf.squeeze(inf_rews, axis=-1)
+    # inf_rews = model.predict(batch_states_actions, batch_size=32, verbose=0)
+    inf_rews = model(torch.Tensor(batch_states_actions)).cpu().detach().numpy()
+    # inf_rews = tf.squeeze(inf_rews, axis=-1)
 
     for i in range(len(infer_buffer)):
         states_actions = batch_states_actions[i]
@@ -342,7 +343,7 @@ def infer_and_save_rewards(
             inf_rews_i = inf_rews_i[:length]
 
         all_feats = np.concatenate(
-            (non_feats[:length], states_actions, inf_rews_i[:, None]), axis=-1
+            (non_feats[:length], states_actions, inf_rews_i), axis=-1
         )
         result.extend(all_feats)
 
