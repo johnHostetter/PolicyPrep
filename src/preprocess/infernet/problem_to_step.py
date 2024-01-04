@@ -100,7 +100,7 @@ def propagate_problem_reward_to_step_level_data(
     Propagate the rewards from the problem level to the step level. This function is
     called by the `propagate_problem_level_rewards_to_step_level` function. It is
     called in parallel for each exercise. The function modifies the `step_data`
-    DataFrame in-place. The `step_data` DataFrame is saved to the appropriate
+    DataFrame in-place. The `step_data` Loaded runtime CuDNN library: 8.5.0 but source was compiled with: 8.6.0.  CuDNN library needs to have matching major version and equal or higher minor version.DataFrame is saved to the appropriate
     subdirectory.
     Args:
         config: The configuration file.

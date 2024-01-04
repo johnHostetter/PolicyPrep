@@ -4,16 +4,18 @@ This file contains the common functions used in the InferNet model.
 from pathlib import Path
 from typing import List, Union
 
-import d3rlpy.dataset
+import torch
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-import tensorflow.keras.backend as K
-from tensorflow.keras import Sequential
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import TimeDistributed, Dense, Dropout, LeakyReLU
+import d3rlpy.dataset
+# import tensorflow as tf
+# import tensorflow.keras.backend as K
+# from tensorflow.keras import Sequential
+# from tensorflow.keras.optimizers import Adam
+# from tensorflow.keras.layers import TimeDistributed, Dense, Dropout, LeakyReLU
 
 from YACS.yacs import Config
+from src.utils.wrappers import TimeDistributed
 from src.utils.reproducibility import path_to_project_root, load_configuration
 
 
@@ -42,27 +44,27 @@ def read_data(
     return data[data["userID"].isin(selected_users)]
 
 
-def loss_function(true_output, predicted_output):  # TODO: check arg & return types
+# def loss_function(true_output, predicted_output):  # TODO: check arg & return types
+#     """
+#     InferNet's loss function.
+#
+#     Args:
+#         true_output: The true output.
+#         predicted_output: The predicted output.
+#
+#     Returns:
+#         The loss.
+#     """
+#     inferred_sum = K.sum(predicted_output, axis=1)
+#     inferred_sum = tf.reshape(
+#         inferred_sum, (tf.shape(true_output)[0], tf.shape(true_output)[1])
+#     )
+#     return K.mean(K.square(inferred_sum - true_output), axis=-1)
+
+
+def build_model(max_ep_length: int, num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
     """
-    InferNet's loss function.
-
-    Args:
-        true_output: The true output.
-        predicted_output: The predicted output.
-
-    Returns:
-        The loss.
-    """
-    inferred_sum = K.sum(predicted_output, axis=1)
-    inferred_sum = tf.reshape(
-        inferred_sum, (tf.shape(true_output)[0], tf.shape(true_output)[1])
-    )
-    return K.mean(K.square(inferred_sum - true_output), axis=-1)
-
-
-def build_model(max_ep_length: int, num_sas_features: int) -> (Sequential, Adam):
-    """
-    Build the InferNet model.
+    Build the InferNet model and its optimizer.
 
     Args:
         max_ep_length: The maximum episode length.
@@ -71,38 +73,54 @@ def build_model(max_ep_length: int, num_sas_features: int) -> (Sequential, Adam)
     Returns:
         The InferNet model and the optimizer.
     """
-    model = Sequential()
-    optimizer = Adam(learning_rate=0.0001)
-
-    model.add(
-        TimeDistributed(Dense(128), input_shape=(max_ep_length, num_sas_features))
+    neural_network: torch.nn.Sequential = torch.nn.Sequential(
+        torch.nn.Linear(in_features=num_sas_features, out_features=256, bias=True),
+        torch.nn.LeakyReLU(),
+        torch.nn.Dropout(p=0.5),
+        torch.nn.Linear(in_features=256, out_features=256, bias=True),
+        torch.nn.LeakyReLU(),
+        torch.nn.Dropout(p=0.5),
+        torch.nn.Linear(in_features=256, out_features=256, bias=True),
+        torch.nn.LeakyReLU(),
+        torch.nn.Linear(in_features=256, out_features=1, bias=True),
     )
-    model.add(LeakyReLU())
-    model.add(Dropout(0.5))
-    model.add(TimeDistributed(Dense(128)))
-    model.add(LeakyReLU())
-    model.add(Dropout(0.5))
-    model.add(TimeDistributed(Dense(128)))
-    model.add(LeakyReLU())
-    # output layer's dtype required to be tf.float32 if using mixed precision
-    model.add(TimeDistributed(Dense(1, dtype=tf.float32)))
-    model.compile(loss=loss_function, optimizer=optimizer)
+
+    model = TimeDistributed(module=neural_network)
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-5)  # the 'lr' is learning rate
     return model, optimizer
 
+    # model = Sequential()
+    # optimizer = Adam(learning_rate=0.0001)
+    #
+    # model.add(
+    #     TimeDistributed(Dense(128), input_shape=(max_ep_length, num_sas_features))
+    # )
+    # model.add(LeakyReLU())
+    # model.add(Dropout(0.5))
+    # model.add(TimeDistributed(Dense(128)))
+    # model.add(LeakyReLU())
+    # model.add(Dropout(0.5))
+    # model.add(TimeDistributed(Dense(128)))
+    # model.add(LeakyReLU())
+    # # output layer's dtype required to be tf.float32 if using mixed precision
+    # model.add(TimeDistributed(Dense(1, dtype=tf.float32)))
+    # model.compile(loss=loss_function, optimizer=optimizer)
+    # return model, optimizer
 
-def load_infernet_model(path_to_model: Path) -> Sequential:
-    """
-    Load the InferNet model.
 
-    Args:
-        path_to_model: The path to the model.
-
-    Returns:
-        The InferNet model.
-    """
-    return tf.keras.models.load_model(
-        path_to_model, custom_objects={"loss_function": loss_function}
-    )
+# def load_infernet_model(path_to_model: Path) -> Sequential:  # TODO: rewrite this for PyTorch
+#     """
+#     Load the InferNet model.
+#
+#     Args:
+#         path_to_model: The path to the model.
+#
+#     Returns:
+#         The InferNet model.
+#     """
+#     return tf.keras.models.load_model(
+#         path_to_model, custom_objects={"loss_function": loss_function}
+#     )
 
 
 def calc_max_episode_length(mdp_dataset: d3rlpy.dataset.MDPDataset) -> int:
@@ -262,7 +280,8 @@ def infer_and_save_rewards(
     iteration: int,
     infer_buffer: List[tuple],
     max_len: int,
-    model: Sequential,
+    # model: Sequential,
+    model: TimeDistributed,
     state_feature_columns: List[str],
     num_state_and_actions: int,
     is_problem_level: bool = True,

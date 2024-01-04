@@ -8,9 +8,12 @@ import argparse
 import multiprocessing as mp
 from typing import Tuple, List
 
+import torch
 import numpy as np
 import pandas as pd
-import tensorflow as tf
+from d3rlpy.dataset import MDPDataset
+from skorch import NeuralNetRegressor
+# import tensorflow as tf
 
 from YACS.yacs import Config
 from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
@@ -29,12 +32,12 @@ from src.utils.reproducibility import (
     path_to_project_root,
 )
 
-# Automatic Mixed Precision: speeds up AI models ~ 3 times & helps w/ memory
-tf.keras.mixed_precision.set_global_policy("mixed_float16")
-# reduce the priority of TensorFlow for CPU usage to free up resources
-os.nice(10)
-# prevent TensorFlow from allocating too much memory at once
-os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+# # Automatic Mixed Precision: speeds up AI models ~ 3 times & helps w/ memory
+# tf.keras.mixed_precision.set_global_policy("mixed_float16")
+# # reduce the priority of TensorFlow for CPU usage to free up resources
+# os.nice(10)
+# # prevent TensorFlow from allocating too much memory at once
+# os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
 
 def train_infer_net(problem_id: str) -> None:
@@ -48,37 +51,39 @@ def train_infer_net(problem_id: str) -> None:
     Returns:
         None
     """
-    # see if a GPU is available
-    physical_devices = tf.config.list_physical_devices("GPU")
-    if len(physical_devices) > 0:
-        # configure tensorflow to use the GPU
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-        # set the memory growth to true
-        tf.config.experimental.set_memory_growth(physical_devices[0], True)
-
-        # print the device name
-        print(f"Running on {physical_devices[0]}")
-    else:
-        # configure tensorflow to use the CPU
-        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-    # disable the TensorFlow output messages
-    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+    # # see if a GPU is available
+    # physical_devices = tf.config.list_physical_devices("GPU")
+    # if len(physical_devices) > 0:
+    #     # configure tensorflow to use the GPU
+    #     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    #
+    #     # set the memory growth to true
+    #     tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    #
+    #     # print the device name
+    #     print(f"Running on {physical_devices[0]}")
+    # else:
+    #     # configure tensorflow to use the CPU
+    #     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    # # disable the TensorFlow output messages
+    # os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
     # load the configuration file
     config = load_configuration()
     # set the random seed
     set_random_seed(seed=config.training.seed)
-    is_problem_level, max_len, original_data, user_ids = infernet_setup(problem_id)
+    is_problem_level, mdp_dataset, normalized_data = infernet_setup(problem_id, config=config)
+    max_len = calc_max_episode_length(mdp_dataset)
+    user_ids: List[int] = normalized_data["userID"].unique().tolist()
 
     # select the features and actions depending on if the data is problem-level or step-level
     state_features, possible_actions = get_features_and_actions(
         config, is_problem_level
     )
 
-    # normalize the data
-    normalized_data = normalize_data(
-        original_data, problem_id, columns_to_normalize=state_features
-    )
+    # # normalize the data
+    # normalized_data = normalize_data(
+    #     original_data, problem_id, columns_to_normalize=state_features
+    # )
     # create the buffer to train InferNet from
     infer_buffer = create_buffer(
         normalized_data,
@@ -97,6 +102,7 @@ def train_infer_net(problem_id: str) -> None:
     print("#####################")
     start_time = time.time()
     losses = []
+    criterion = torch.nn.MSELoss()
     for iteration in range(config.training.data.num_iterations + 1):
         # if iteration < 810000:
         #     continue
@@ -112,65 +118,72 @@ def train_infer_net(problem_id: str) -> None:
             (config.training.data.batch_size, max_len, num_state_and_actions),
         )
         imm_rew_sum = np.reshape(imm_rew_sum, (config.training.data.batch_size, 1))
-        hist = model.fit(
-            states_actions,
-            imm_rew_sum,
-            epochs=1,
-            batch_size=config.training.data.batch_size,
-            verbose=0,
-        )
-        loss = hist.history["loss"][0]
-        losses.append(loss)
-        if iteration > 0 and iteration % config.training.data.checkpoint == 0:
-            print(
-                f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}"
-            )
-            print("Training time is", time.time() - start_time, "seconds")
-            start_time = time.time()
-
-            # Infer the rewards for the data and save the data.
-            if is_problem_level:
-                state_feature_columns = config.data.features.problem
-            else:
-                state_feature_columns = config.data.features.step
-
-            infer_and_save_rewards(
-                problem_id,
-                iteration,
-                infer_buffer,
-                max_len,
-                model,
-                state_feature_columns,
-                num_state_and_actions,
-                is_problem_level=is_problem_level,
-            )
-
-            loss_df = pd.DataFrame({"loss": losses})
-            # save the loss data to generate the loss plot
-            path_to_figures = path_to_project_root() / "figures"
-            path_to_figures.mkdir(parents=True, exist_ok=True)
-            loss_df.to_csv(
-                path_to_figures / f"loss_{problem_id}_{iteration}.csv", index=False
-            )
-            # save the model
-            path_to_models = path_to_project_root() / "models" / "infernet"
-            path_to_models.mkdir(parents=True, exist_ok=True)
-            model.save(path_to_models / f"{problem_id}_{iteration}.h5")
-            # save a checkpoint, to restore model weights and optimizer settings if training fails
-            path_to_checkpoints = path_to_project_root() / "models" / "infernet" / "checkpoints"
-            path_to_checkpoints.mkdir(parents=True, exist_ok=True)
-            checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
-            checkpoint.save(path_to_checkpoints / f"{problem_id}_{iteration}")
+        predicted_immediate_rewards = model(torch.Tensor(states_actions))
+        loss = criterion(predicted_immediate_rewards.sum(dim=0), torch.Tensor(imm_rew_sum))
+        optimizer.zero_grad()
+        loss.backward()
+        if iteration % 10000 == 0:
+            print(loss.item())
+        # hist = model.fit(
+        #     states_actions,
+        #     imm_rew_sum,
+        #     epochs=1,
+        #     batch_size=config.training.data.batch_size,
+        #     verbose=0,
+        # )
+        # loss = hist.history["loss"][0]
+        losses.append(loss.item())
+        # if iteration > 0 and iteration % config.training.data.checkpoint == 0:
+        #     print(
+        #         f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}"
+        #     )
+        #     print("Training time is", time.time() - start_time, "seconds")
+        #     start_time = time.time()
+        #
+        #     # Infer the rewards for the data and save the data.
+        #     if is_problem_level:
+        #         state_feature_columns = config.data.features.problem
+        #     else:
+        #         state_feature_columns = config.data.features.step
+        #
+        #     infer_and_save_rewards(
+        #         problem_id,
+        #         iteration,
+        #         infer_buffer,
+        #         max_len,
+        #         model,
+        #         state_feature_columns,
+        #         num_state_and_actions,
+        #         is_problem_level=is_problem_level,
+        #     )
+        #
+        #     loss_df = pd.DataFrame({"loss": losses})
+        #     # save the loss data to generate the loss plot
+        #     path_to_figures = path_to_project_root() / "figures"
+        #     path_to_figures.mkdir(parents=True, exist_ok=True)
+        #     loss_df.to_csv(
+        #         path_to_figures / f"loss_{problem_id}_{iteration}.csv", index=False
+        #     )
+        #     # save the model
+        #     path_to_models = path_to_project_root() / "models" / "infernet"
+        #     path_to_models.mkdir(parents=True, exist_ok=True)
+        #     model.save(path_to_models / f"{problem_id}_{iteration}.h5")
+        #     # save a checkpoint, to restore model weights and optimizer settings if training fails
+        #     path_to_checkpoints = path_to_project_root() / "models" / "infernet" / "checkpoints"
+        #     path_to_checkpoints.mkdir(parents=True, exist_ok=True)
+        #     checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+        #     checkpoint.save(path_to_checkpoints / f"{problem_id}_{iteration}")
     print(f"Done training InferNet for {problem_id}.")
 
 
-def infernet_setup(problem_id: str) -> Tuple[bool, int, pd.DataFrame, np.ndarray]:
+def infernet_setup(problem_id: str, config: Config) -> Tuple[bool, MDPDataset, pd.DataFrame]:
     """
     Set up the InferNet model for the problem level data if "problem" is in problem_id. Otherwise,
     set up the InferNet model for the step level data.
 
     Args:
         problem_id:
+        config:
 
     Returns:
         A tuple containing the following:
@@ -181,12 +194,19 @@ def infernet_setup(problem_id: str) -> Tuple[bool, int, pd.DataFrame, np.ndarray
     """
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id
-    tf.keras.backend.set_floatx("float32")  # float64 causes memory issues
+    # tf.keras.backend.set_floatx("float32")  # float64 causes memory issues
     original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
-    mdp_dataset = data_frame_to_d3rlpy_dataset(original_data, problem_id)
-    user_ids = original_data["userID"].unique()
-    max_len = calc_max_episode_length(mdp_dataset)
-    return is_problem_level, max_len, original_data, user_ids
+    # select the features and actions depending on if the data is problem-level or step-level
+    state_features, possible_actions = get_features_and_actions(
+        config, is_problem_level
+    )
+    normalized_data = normalize_data(
+        original_data, problem_id, columns_to_normalize=state_features
+    )
+    mdp_dataset = data_frame_to_d3rlpy_dataset(normalized_data, problem_id)
+    # user_ids = original_data["userID"].unique()
+    # max_len = calc_max_episode_length(mdp_dataset)
+    return is_problem_level, mdp_dataset, normalized_data
 
 
 def get_features_and_actions(

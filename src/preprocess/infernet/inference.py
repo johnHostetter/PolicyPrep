@@ -35,17 +35,17 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
     # load the configuration file
     config = load_configuration()
 
-    is_problem_level, max_len, original_data, user_ids = infernet_setup(problem_id)
+    is_problem_level, mdp_dataset, normalized_data = infernet_setup(problem_id, config=config)
 
     # select the features and actions depending on if the data is problem-level or step-level
     state_features, possible_actions = get_features_and_actions(
         config, is_problem_level
     )
 
-    # normalize the data
-    normalized_data = normalize_data(
-        original_data, problem_id, columns_to_normalize=state_features
-    )
+    # # normalize the data
+    # normalized_data = normalize_data(
+    #     original_data, problem_id, columns_to_normalize=state_features
+    # )
 
     # modify the data to use the hypothetical action
     if hypothetical_action in possible_actions:

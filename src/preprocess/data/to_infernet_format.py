@@ -431,7 +431,7 @@ def convert_step_level_format(
         # user IDs below 100 are considered test users - remove them, as well as other 'bad' users
         user_ids = [
             user_id for user_id in user_ids
-            if user_id >= minimum_id(semester_name) or user_id not in user_ids_to_be_removed
+            if user_id >= minimum_id(semester_name) and user_id not in user_ids_to_be_removed
         ]
 
         # make them consistent with each other

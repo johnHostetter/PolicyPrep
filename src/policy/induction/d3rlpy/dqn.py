@@ -90,6 +90,7 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     Returns:
         None
     """
+    print(len(mdp_dataset.episodes))
     train_episodes, test_episodes = train_test_split(mdp_dataset, test_size=0.2)
 
     # train_episodes = train_episodes[:10]
@@ -102,7 +103,7 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
         path_to_project_root() / "PySoft" / "configurations" / "default_configuration.yaml"
     )
 
-    # change default d
+    # change default pyd
     # evice for PyTorch to use the GPU if it is available
     device = "cpu"
     torch.set_default_device("cpu")
