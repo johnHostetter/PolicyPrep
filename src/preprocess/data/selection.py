@@ -13,7 +13,7 @@ import pandas as pd
 from natsort import natsorted  # sorts lists "naturally"
 
 from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
-from src.utils.reproducibility import load_configuration, path_to_project_root
+from src.utilities.reproducibility import load_configuration, path_to_project_root
 
 
 def select_training_data_for_policy_induction(num_workers: int = 1) -> None:

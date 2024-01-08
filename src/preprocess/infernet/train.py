@@ -13,9 +13,10 @@ import numpy as np
 import pandas as pd
 from d3rlpy.dataset import MDPDataset
 from skorch import NeuralNetRegressor
-# import tensorflow as tf
 
 from YACS.yacs import Config
+from soft.computing.wrappers import TimeDistributed
+from soft.fuzzy.logic.controller import ZeroOrderTSK
 from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
 
 from src.preprocess.infernet.common import (
@@ -26,18 +27,11 @@ from src.preprocess.infernet.common import (
     create_buffer,
     infer_and_save_rewards,
 )
-from src.utils.reproducibility import (
+from src.utilities.reproducibility import (
     load_configuration,
     set_random_seed,
     path_to_project_root,
 )
-
-# # Automatic Mixed Precision: speeds up AI models ~ 3 times & helps w/ memory
-# tf.keras.mixed_precision.set_global_policy("mixed_float16")
-# # reduce the priority of TensorFlow for CPU usage to free up resources
-# os.nice(10)
-# # prevent TensorFlow from allocating too much memory at once
-# os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
 
 def train_infer_net(problem_id: str) -> None:
@@ -51,22 +45,6 @@ def train_infer_net(problem_id: str) -> None:
     Returns:
         None
     """
-    # # see if a GPU is available
-    # physical_devices = tf.config.list_physical_devices("GPU")
-    # if len(physical_devices) > 0:
-    #     # configure tensorflow to use the GPU
-    #     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    #
-    #     # set the memory growth to true
-    #     tf.config.experimental.set_memory_growth(physical_devices[0], True)
-    #
-    #     # print the device name
-    #     print(f"Running on {physical_devices[0]}")
-    # else:
-    #     # configure tensorflow to use the CPU
-    #     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-    # # disable the TensorFlow output messages
-    # os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
     # load the configuration file
     config = load_configuration()
     # set the random seed
@@ -80,10 +58,6 @@ def train_infer_net(problem_id: str) -> None:
         config, is_problem_level
     )
 
-    # # normalize the data
-    # normalized_data = normalize_data(
-    #     original_data, problem_id, columns_to_normalize=state_features
-    # )
     # create the buffer to train InferNet from
     infer_buffer = create_buffer(
         normalized_data,
@@ -96,7 +70,63 @@ def train_infer_net(problem_id: str) -> None:
     num_state_and_actions = len(state_features) + len(possible_actions)
     print(f"{problem_id}: Max episode length is {max_len}")
 
-    model, optimizer = build_model(max_len, len(state_features) + len(possible_actions))
+    # PySoft
+    import soft.computing.blueprints
+    from soft.computing.wrappers import CustomEncoderFactory as SoftEncoderFactory
+
+    soft_config = load_configuration(
+        path_to_project_root() / "PySoft" / "configurations" / "default_configuration.yaml"
+    )
+
+    with soft_config.unfreeze():
+        # soft_config.device = device  # reflect those changes in the Config object
+        if soft_config.fuzzy.t_norm.yager.lower() == "euler":
+            w_parameter = np.e
+        elif soft_config.fuzzy.t_norm.yager.lower() == "golden":
+            w_parameter = (1 + 5 ** 0.5) / 2
+        else:
+            w_parameter = float(soft_config.fuzzy.t_norm.yager)
+        soft_config.fuzzy.t_norm.yager = w_parameter
+        soft_config.fuzzy.rough.compatibility = False
+        # soft_config.output.name = path_to_project_root() / "figures" / "CEW" / d3rlpy_alg.__name__ / problem_id
+        soft_config.clustering.distance_threshold = 0.17
+        soft_config.training.epochs = 300
+        soft_config.training.learning_rate = 3e-4
+        soft_config.fuzzy.t_norm.yager = np.e
+        soft_config.fuzzy_antecedents_generation.alpha = 0.2
+        soft_config.fuzzy_antecedents_generation.beta = 0.7
+
+    train_transitions = np.array(
+        [transition for episode in mdp_dataset.episodes for transition in episode.observations]
+    )  # outer loop is first, then inner loop
+    # test_transitions = np.array(
+    #     [transition for episode in test_episodes for transition in episode.observations]
+    # )  # outer loop is first, then inner loop
+    min_values = train_transitions.min(axis=0)
+    max_values = train_transitions.max(axis=0)
+    mask = min_values != max_values
+    train_transitions = torch.tensor(train_transitions[:, mask])
+    # test_transitions = torch.tensor(test_transitions[:, mask])
+
+    self_organize = soft.computing.blueprints.clip_ecm_wm(
+        train_transitions[:10000],
+        # test_transitions,
+        config=soft_config
+    )
+
+    knowledge_base = self_organize.start()
+
+    flc = ZeroOrderTSK(
+        1,
+        knowledge_base=knowledge_base,
+        input_trainable=False,
+        consequences=None,
+    )
+
+    # model, optimizer = build_model(len(state_features) + len(possible_actions))
+
+    model = TimeDistributed(module=flc, batch_first=True)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     # Train the InferNet model
     print("#####################")
@@ -118,24 +148,18 @@ def train_infer_net(problem_id: str) -> None:
             (config.training.data.batch_size, max_len, num_state_and_actions),
         )
         imm_rew_sum = np.reshape(imm_rew_sum, (config.training.data.batch_size, 1))
-        predicted_immediate_rewards = model(torch.Tensor(states_actions))
+        predicted_immediate_rewards = model(torch.Tensor(states_actions[:, :, :-3]))
+        # predicted_immediate_rewards = model(torch.Tensor(states_actions[:, :, np.array(mask.tolist() + [True, True, True])]))
         loss = criterion(predicted_immediate_rewards.sum(dim=1), torch.Tensor(imm_rew_sum))
         optimizer.zero_grad()
         loss.backward()
-        if iteration % 10000 == 0:
+        if iteration % 1000 == 0:
             print(loss.item())
-        # hist = model.fit(
-        #     states_actions,
-        #     imm_rew_sum,
-        #     epochs=1,
-        #     batch_size=config.training.data.batch_size,
-        #     verbose=0,
-        # )
-        # loss = hist.history["loss"][0]
         losses.append(loss.item())
         if iteration > 0 and iteration % config.training.data.checkpoint == 0:
             print(
-                f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}"
+                f"Step: {iteration}/{config.training.data.num_iterations}, "
+                f"Loss: {np.mean(losses[-config.training.data.checkpoint:])}"
             )
             print("Training time is", time.time() - start_time, "seconds")
             start_time = time.time()
@@ -168,7 +192,6 @@ def train_infer_net(problem_id: str) -> None:
             path_to_models = path_to_project_root() / "models" / "infernet"
             path_to_models.mkdir(parents=True, exist_ok=True)
             torch.save(model, path_to_models / f"{problem_id}_{iteration}.pt")
-            # model.save(path_to_models / f"{problem_id}_{iteration}.h5")
             # save a checkpoint, to restore model weights and optimizer settings if training fails
             path_to_checkpoints = path_to_project_root() / "models" / "infernet" / "checkpoints"
             path_to_checkpoints.mkdir(parents=True, exist_ok=True)
@@ -176,8 +199,6 @@ def train_infer_net(problem_id: str) -> None:
                 {"model": model.state_dict(), "optimizer": optimizer.state_dict()},
                 path_to_checkpoints / f"{problem_id}_{iteration}.pt"
             )  # we can use a dictionary to save any arbitrary information (e.g., lr_scheduler)
-            # checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
-            # checkpoint.save(path_to_checkpoints / f"{problem_id}_{iteration}")
     print(f"Done training InferNet for {problem_id}.")
 
 
@@ -198,7 +219,6 @@ def infernet_setup(problem_id: str, config: Config) -> Tuple[bool, MDPDataset, p
     """
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id
-    # tf.keras.backend.set_floatx("float32")  # float64 causes memory issues
     original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
     # select the features and actions depending on if the data is problem-level or step-level
     state_features, possible_actions = get_features_and_actions(

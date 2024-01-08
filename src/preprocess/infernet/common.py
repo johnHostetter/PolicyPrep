@@ -8,15 +8,10 @@ import torch
 import numpy as np
 import pandas as pd
 import d3rlpy.dataset
-# import tensorflow as tf
-# import tensorflow.keras.backend as K
-# from tensorflow.keras import Sequential
-# from tensorflow.keras.optimizers import Adam
-# from tensorflow.keras.layers import TimeDistributed, Dense, Dropout, LeakyReLU
 
 from YACS.yacs import Config
-from src.utils.wrappers import TimeDistributed
-from src.utils.reproducibility import path_to_project_root, load_configuration
+from src.utilities.wrappers import TimeDistributed
+from src.utilities.reproducibility import path_to_project_root, load_configuration
 
 
 def read_data(
@@ -44,83 +39,61 @@ def read_data(
     return data[data["userID"].isin(selected_users)]
 
 
-# def loss_function(true_output, predicted_output):  # TODO: check arg & return types
-#     """
-#     InferNet's loss function.
-#
-#     Args:
-#         true_output: The true output.
-#         predicted_output: The predicted output.
-#
-#     Returns:
-#         The loss.
-#     """
-#     inferred_sum = K.sum(predicted_output, axis=1)
-#     inferred_sum = tf.reshape(
-#         inferred_sum, (tf.shape(true_output)[0], tf.shape(true_output)[1])
-#     )
-#     return K.mean(K.square(inferred_sum - true_output), axis=-1)
-
-
-def build_model(max_ep_length: int, num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
+def build_model(num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
     """
     Build the InferNet model and its optimizer.
 
     Args:
-        max_ep_length: The maximum episode length.
         num_sas_features: The number of state and action features.
 
     Returns:
         The InferNet model and the optimizer.
     """
     neural_network: torch.nn.Sequential = torch.nn.Sequential(
-        torch.nn.Linear(in_features=num_sas_features, out_features=256, bias=True),
+        TimeDistributed(
+            module=torch.nn.Linear(in_features=num_sas_features, out_features=256, bias=True),
+            batch_first=True
+        ),
         torch.nn.LeakyReLU(),
+        # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
+        # torch.nn.BatchNorm1d(num_features=128),
+        torch.nn.Dropout(p=0.1),
+        TimeDistributed(
+            module=torch.nn.Linear(in_features=256, out_features=256, bias=True),
+            batch_first=True
+        ),
+        torch.nn.LeakyReLU(),
+        # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
+        # torch.nn.BatchNorm1d(num_features=128),
         torch.nn.Dropout(p=0.5),
-        torch.nn.Linear(in_features=256, out_features=256, bias=True),
+        TimeDistributed(
+            module=torch.nn.Linear(in_features=256, out_features=128, bias=True),
+            batch_first=True
+        ),
         torch.nn.LeakyReLU(),
-        torch.nn.Dropout(p=0.5),
-        torch.nn.Linear(in_features=256, out_features=256, bias=True),
-        torch.nn.LeakyReLU(),
-        torch.nn.Linear(in_features=256, out_features=1, bias=True),
+        TimeDistributed(
+            module=torch.nn.Linear(in_features=128, out_features=1, bias=True),
+            batch_first=True
+        ),
     )
 
-    model = TimeDistributed(module=neural_network, batch_first=True)
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-5)  # the 'lr' is learning rate
+    # model = TimeDistributed(module=neural_network, batch_first=True)
+    model = neural_network
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-3)  # the 'lr' is learning rate
     return model, optimizer
 
-    # model = Sequential()
-    # optimizer = Adam(learning_rate=0.0001)
-    #
-    # model.add(
-    #     TimeDistributed(Dense(128), input_shape=(max_ep_length, num_sas_features))
-    # )
-    # model.add(LeakyReLU())
-    # model.add(Dropout(0.5))
-    # model.add(TimeDistributed(Dense(128)))
-    # model.add(LeakyReLU())
-    # model.add(Dropout(0.5))
-    # model.add(TimeDistributed(Dense(128)))
-    # model.add(LeakyReLU())
-    # # output layer's dtype required to be tf.float32 if using mixed precision
-    # model.add(TimeDistributed(Dense(1, dtype=tf.float32)))
-    # model.compile(loss=loss_function, optimizer=optimizer)
-    # return model, optimizer
 
+def load_infernet_model(path_to_model: Path) -> TimeDistributed:  # TODO: rewrite this for PyTorch
+    """
+    Load the InferNet model.
 
-# def load_infernet_model(path_to_model: Path) -> Sequential:  # TODO: rewrite this for PyTorch
-#     """
-#     Load the InferNet model.
-#
-#     Args:
-#         path_to_model: The path to the model.
-#
-#     Returns:
-#         The InferNet model.
-#     """
-#     return tf.keras.models.load_model(
-#         path_to_model, custom_objects={"loss_function": loss_function}
-#     )
+    Args:
+        path_to_model: The path to the model.
+
+    Returns:
+        The InferNet model.
+    """
+    return torch.load(path_to_model)
 
 
 def calc_max_episode_length(mdp_dataset: d3rlpy.dataset.MDPDataset) -> int:

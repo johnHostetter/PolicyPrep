@@ -10,7 +10,7 @@ import pandas as pd
 from YACS.yacs import Config
 from src.preprocess.data.selection import get_most_recent_file
 from src.preprocess.infernet.common import read_data
-from src.utils.reproducibility import load_configuration, path_to_project_root
+from src.utilities.reproducibility import load_configuration, path_to_project_root
 
 
 def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:

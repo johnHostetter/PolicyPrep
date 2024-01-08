@@ -11,7 +11,7 @@ import pandas as pd
 from d3rlpy.dataset import MDPDataset
 
 from YACS.yacs import Config
-from src.utils.reproducibility import load_configuration, path_to_project_root
+from src.utilities.reproducibility import load_configuration, path_to_project_root
 
 
 def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:

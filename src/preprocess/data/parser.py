@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from YACS.yacs import Config
-from src.utils.reproducibility import load_configuration
+from src.utilities.reproducibility import load_configuration
 
 
 def data_frame_to_d3rlpy_dataset(

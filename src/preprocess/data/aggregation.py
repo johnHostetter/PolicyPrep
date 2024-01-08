@@ -27,7 +27,7 @@ step-level immediate rewards.
 """
 import pandas as pd
 
-from src.utils.reproducibility import load_configuration, path_to_project_root
+from src.utilities.reproducibility import load_configuration, path_to_project_root
 
 
 def iterate_over_semester_data(subdirectory: str, problem_id: str) -> None:

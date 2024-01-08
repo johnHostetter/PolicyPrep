@@ -23,8 +23,8 @@ import pandas as pd
 from pandas import DataFrame
 
 from YACS.yacs import Config
-from src.utils.reproducibility import path_to_project_root, load_configuration
-from src.utils.importance_sampling import ImportanceSampling
+from src.utilities.reproducibility import path_to_project_root, load_configuration
+from src.utilities.importance_sampling import ImportanceSampling
 
 
 def evaluate_policy_with_importance_sampling(policy_name: str, problem_id: str, ope_scores_df: DataFrame) -> DataFrame:

@@ -15,7 +15,7 @@ from d3rlpy.dataset import MDPDataset, Episode
 from d3rlpy.metrics import td_error_scorer, average_value_estimation_scorer
 
 from YACS.yacs import Config
-from src.utils.reproducibility import load_configuration, path_to_project_root
+from src.utilities.reproducibility import load_configuration, path_to_project_root
 
 
 def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:

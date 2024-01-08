@@ -12,7 +12,7 @@ from typing import Tuple, Union, List, Callable
 import pandas as pd
 
 from YACS.yacs import Config
-from src.utils.reproducibility import load_configuration, path_to_project_root
+from src.utilities.reproducibility import load_configuration, path_to_project_root
 
 
 def make_year_and_semester_int(semester: str) -> Union[Tuple[int, int], None]:

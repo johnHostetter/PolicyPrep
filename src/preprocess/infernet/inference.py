@@ -5,18 +5,18 @@ if you want to know what the reward would be if you changed the action from "eli
 you can use this script to find out.
 """
 import os
-from typing import Union
+from typing import Union, List
 
+import torch
 import pandas as pd
 
 from src.preprocess.infernet.train import infernet_setup, get_features_and_actions
 from src.preprocess.infernet.common import (
-    load_infernet_model,
     create_buffer,
-    normalize_data,
-    infer_and_save_rewards,
+    infer_and_save_rewards, calc_max_episode_length,
 )
 from src.preprocess.data.selection import get_most_recent_file
+from src.utils.wrappers import TimeDistributed
 from src.utils.reproducibility import load_configuration, path_to_project_root
 
 
@@ -36,16 +36,13 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
     config = load_configuration()
 
     is_problem_level, mdp_dataset, normalized_data = infernet_setup(problem_id, config=config)
+    max_len = calc_max_episode_length(mdp_dataset)
+    user_ids: List[int] = normalized_data["userID"].unique().tolist()
 
     # select the features and actions depending on if the data is problem-level or step-level
     state_features, possible_actions = get_features_and_actions(
         config, is_problem_level
     )
-
-    # # normalize the data
-    # normalized_data = normalize_data(
-    #     original_data, problem_id, columns_to_normalize=state_features
-    # )
 
     # modify the data to use the hypothetical action
     if hypothetical_action in possible_actions:
@@ -73,9 +70,9 @@ def use_infer_net(problem_id: str, hypothetical_action: str) -> pd.DataFrame:
     path_to_model = get_most_recent_file(
         path_to_folder="models" + os.sep + "infernet",
         problem_id=problem_id,
-        extension=".h5",
+        extension=".pt",
     )
-    model = load_infernet_model(path_to_model)
+    model: TimeDistributed = TimeDistributed(module=torch.load(path_to_model), batch_first=True)
 
     # infer the rewards
     print(
