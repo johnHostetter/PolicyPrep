@@ -15,8 +15,9 @@ from d3rlpy.dataset import MDPDataset
 from skorch import NeuralNetRegressor
 
 from YACS.yacs import Config
-from soft.computing.wrappers import TimeDistributed
-from soft.fuzzy.logic.controller import ZeroOrderTSK
+from soft.fuzzy.logic.controller import Specifications
+from soft.fuzzy.logic.controller.impl import ZeroOrderTSK
+from soft.computing.wrappers.temporal import TimeDistributed
 from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
 
 from src.preprocess.infernet.common import (
@@ -71,8 +72,8 @@ def train_infer_net(problem_id: str) -> None:
     print(f"{problem_id}: Max episode length is {max_len}")
 
     # PySoft
-    import soft.computing.blueprints
-    from soft.computing.wrappers import CustomEncoderFactory as SoftEncoderFactory
+    # import soft.computing.blueprints
+    # from soft.computing.wrappers.d3rlpy import CustomEncoderFactory as SoftEncoderFactory
 
     soft_config = load_configuration(
         path_to_project_root() / "PySoft" / "configurations" / "default_configuration.yaml"
@@ -89,12 +90,12 @@ def train_infer_net(problem_id: str) -> None:
         soft_config.fuzzy.t_norm.yager = w_parameter
         soft_config.fuzzy.rough.compatibility = False
         # soft_config.output.name = path_to_project_root() / "figures" / "CEW" / d3rlpy_alg.__name__ / problem_id
-        soft_config.clustering.distance_threshold = 0.17
-        soft_config.training.epochs = 300
+        # soft_config.clustering.distance_threshold = 0.17
+        # soft_config.training.epochs = 300
         soft_config.training.learning_rate = 3e-4
-        soft_config.fuzzy.t_norm.yager = np.e
-        soft_config.fuzzy_antecedents_generation.alpha = 0.2
-        soft_config.fuzzy_antecedents_generation.beta = 0.7
+        # soft_config.fuzzy.t_norm.yager = np.e
+        # soft_config.fuzzy_antecedents_generation.alpha = 0.2
+        # soft_config.fuzzy_antecedents_generation.beta = 0.7
 
     train_transitions = np.array(
         [transition for episode in mdp_dataset.episodes for transition in episode.observations]
@@ -108,22 +109,47 @@ def train_infer_net(problem_id: str) -> None:
     train_transitions = torch.tensor(train_transitions[:, mask])
     # test_transitions = torch.tensor(test_transitions[:, mask])
 
-    self_organize = soft.computing.blueprints.clip_ecm_wm(
-        train_transitions[:10000],
-        # test_transitions,
-        config=soft_config
-    )
+    # self_organize = soft.computing.blueprints.clip_ecm_wm(
+    #     train_transitions[:10000],
+    #     # test_transitions,
+    #     config=soft_config
+    # )
 
-    knowledge_base = self_organize.start()
+    # knowledge_base = self_organize.start()
 
-    flc = ZeroOrderTSK(
-        1,
-        knowledge_base=knowledge_base,
-        input_trainable=False,
-        consequences=None,
-    )
+    # flc = ZeroOrderTSK(
+    #     1,
+    #     knowledge_base=knowledge_base,
+    #     input_trainable=False,
+    #     consequences=None,
+    # )
+
+
 
     # model, optimizer = build_model(len(state_features) + len(possible_actions))
+
+    specifications = Specifications(
+        t_norm="algebraic_product",
+        number_of_variables={
+            "input": len(state_features),
+            "output": 1,
+        },
+        number_of_terms={
+            "input": 5,
+            "output": 1,
+        },
+        expandable_variables={
+            "input": True,
+            "output": False,
+        },
+        number_of_rules=100,
+    )
+    knowledge_base = None
+
+    # FLC from network morphism
+    flc = ZeroOrderTSK(
+        specifications=specifications, knowledge_base=knowledge_base
+    )
 
     model = TimeDistributed(module=flc, batch_first=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
@@ -148,13 +174,14 @@ def train_infer_net(problem_id: str) -> None:
             (config.training.data.batch_size, max_len, num_state_and_actions),
         )
         imm_rew_sum = np.reshape(imm_rew_sum, (config.training.data.batch_size, 1))
-        predicted_immediate_rewards = model(torch.Tensor(states_actions[:, :, :-3]))
+        predicted_immediate_rewards = model(torch.Tensor(states_actions[:, :, :-3]).cuda()).cpu()
         # predicted_immediate_rewards = model(torch.Tensor(states_actions[:, :, np.array(mask.tolist() + [True, True, True])]))
-        loss = criterion(predicted_immediate_rewards.sum(dim=1), torch.Tensor(imm_rew_sum))
+        loss = criterion(predicted_immediate_rewards.sum(dim=1), torch.Tensor(imm_rew_sum).cpu())
         optimizer.zero_grad()
         loss.backward()
-        if iteration % 1000 == 0:
-            print(loss.item())
+        if iteration > 0 and iteration % 100 == 0:
+            print(iteration, loss.item())
+        # print(loss.item())
         losses.append(loss.item())
         if iteration > 0 and iteration % config.training.data.checkpoint == 0:
             print(
