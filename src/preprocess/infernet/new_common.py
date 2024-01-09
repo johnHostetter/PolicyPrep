@@ -57,7 +57,7 @@ def build_model(num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
         #     batch_first=True,
         # ),
         # torch.nn.Linear(in_features=20, out_features=256, bias=True),
-        torch.nn.Linear(in_features=num_sas_features, out_features=256, bias=True),
+        torch.nn.Linear(in_features=num_sas_features, out_features=128, bias=True),
         # TimeDistributed(
         #     module=torch.nn.Linear(in_features=num_sas_features, out_features=256, bias=True),
         #     batch_first=True
@@ -66,7 +66,7 @@ def build_model(num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
         # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
         # torch.nn.BatchNorm1d(num_features=128),
         # torch.nn.Dropout(p=0.2),
-        torch.nn.Linear(in_features=256, out_features=512, bias=True),
+        torch.nn.Linear(in_features=128, out_features=128, bias=True),
         torch.nn.PReLU(),
         # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
         # torch.nn.BatchNorm1d(num_features=128),
@@ -75,8 +75,8 @@ def build_model(num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
         # torch.nn.ReLU6(),
         # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
         # torch.nn.BatchNorm1d(num_features=128),
-        torch.nn.Dropout(p=0.5),
-        torch.nn.Linear(in_features=512, out_features=256, bias=True),
+        # torch.nn.Dropout(p=0.5),
+        # torch.nn.Linear(in_features=128, out_features=128, bias=True),
         # TimeDistributed(
         #     module=torch.nn.Linear(in_features=256, out_features=256, bias=True),
         #     batch_first=True
@@ -92,7 +92,7 @@ def build_model(num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
         # ),
         torch.nn.PReLU(),
         # torch.nn.Dropout(p=0.5),
-        torch.nn.Linear(in_features=256, out_features=3, bias=True),
+        torch.nn.Linear(in_features=128, out_features=1, bias=True),
         # TimeDistributed(
         #     module=torch.nn.Linear(in_features=128, out_features=3, bias=True),
         #     batch_first=True

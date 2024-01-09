@@ -17,6 +17,10 @@ class TimeDistributed(torch.nn.Module):
         """
         super().__init__()
         self.module = module
+        # self.modules_list = torch.nn.ModuleList([])
+        # for idx in range(12):
+        #     from copy import deepcopy
+        #     self.modules_list.add_module(str(idx), deepcopy(module))
         self.batch_first = batch_first
 
     def forward(self, input_data: torch.Tensor) -> torch.Tensor:
@@ -31,6 +35,15 @@ class TimeDistributed(torch.nn.Module):
         """
         if len(input_data.size()) <= 2:
             return self.module(input_data)
+
+        # res = []
+        # for idx, mod in enumerate(self.modules_list):
+        #     dat = input_data[:, idx, :]
+        #     # print(dat.shape)
+        #     # print(dat)
+        #     res.append(mod(dat))
+        #
+        # return torch.stack(res).transpose(0, 1)
 
         # squash samples and timesteps into a single axis
         reshaped_input_data = input_data.contiguous().view(
