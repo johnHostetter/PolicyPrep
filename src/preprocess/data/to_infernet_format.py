@@ -8,8 +8,10 @@ InferNet code.
 import sys
 import warnings
 from pathlib import Path
+from alive_progress import alive_bar
 from typing import Tuple, Union, List, Callable
 
+import numpy as np
 import pandas as pd
 from colorama import (
     init as colorama_init,
@@ -95,42 +97,44 @@ def iterate_over_semester_data(
 
     # iterate over the different semesters of training data
 
-    semester_folder_path_generator = (
-        path_to_project_root() / "data" / subdirectory
-    ).glob("* - *")
-    for semester_folder in semester_folder_path_generator:
-        if not semester_folder.is_dir():
+    semester_folder_path_generator: List[Path] = list(
+        (path_to_project_root() / "data" / subdirectory).glob("* - *")
+    )
+    with alive_bar(len(list(semester_folder_path_generator))) as bar:
+        for semester_folder in semester_folder_path_generator:
+            if not semester_folder.is_dir():
+                print(
+                    f"{Fore.RED}"
+                    f"Skipping {semester_folder.name} (not a directory)..."
+                    f"{Style.RESET_ALL}"
+                )
+                continue
+            if " - " not in semester_folder.name:
+                print(
+                    f"{Fore.RED}"
+                    f"Skipping {semester_folder.name} (invalid directory name)..."
+                    f"{Style.RESET_ALL}"
+                )
+                continue
+
+            # the name of the semester is the part of the folder name after the " - "
+            # e.g. "10 - S21" -> "S21"; the part before the " - " is the folder ordering number
+            (_, semester_name) = semester_folder.name.split(" - ")
             print(
-                f"{Fore.RED}"
-                f"Skipping {semester_folder.name} (not a directory)..."
+                f"{Fore.YELLOW}"
+                f"Processing data for the {semester_name} semester..."
                 f"{Style.RESET_ALL}"
             )
-            continue
-        if " - " not in semester_folder.name:
-            warnings.warn(
-                f"{Fore.RED}"
-                f"Skipping {semester_folder.name} (invalid directory name)..."
-                f"{Style.RESET_ALL}"
-            )
-            continue
 
-        # the name of the semester is the part of the folder name after the " - "
-        # e.g. "10 - S21" -> "S21"; the part before the " - " is the folder ordering number
-        (_, semester_name) = semester_folder.name.split(" - ")
-        print(
-            f"{Fore.YELLOW}"
-            f"Processing data for the {semester_name} semester..."
-            f"{Style.RESET_ALL}"
-        )
-
-        try:
-            function_to_perform(semester_folder, semester_name, config)
-        except FileNotFoundError as file_not_found_error:
-            warnings.warn(
-                f"Skipping {semester_folder.name} (no {file_not_found_error.filename} file "
-                f"found for this semester)..."
-            )
-            continue
+            try:
+                function_to_perform(semester_folder, semester_name, config)
+            except FileNotFoundError as file_not_found_error:
+                warnings.warn(
+                    f"Skipping {semester_folder.name} (no {file_not_found_error.filename} file "
+                    f"found for this semester)..."
+                )
+                continue
+            bar()
 
 
 def convert_data_format(
@@ -372,6 +376,7 @@ def convert_problem_level_format(
 
     prob_lvl_feature_df["action"] = ""
     prob_lvl_feature_df["reward"] = ""
+    users_with_nan_nlg: List[int] = []
     action_col_location = prob_lvl_feature_df.columns.get_loc("action")
     reward_col_location = prob_lvl_feature_df.columns.get_loc("reward")
     for i in range(len(prob_lvl_feature_df)):
@@ -391,10 +396,28 @@ def convert_problem_level_format(
                 except IndexError:
                     prob_lvl_feature_df.iat[i, action_col_location] = unique_actions
         else:
-            if len(grades_df[grades_df["userID"] == user_id]["nlg"].unique()) == 0:
+            user_score: np.ndarray = grades_df[grades_df["userID"] == user_id][
+                config.data.grades.metric
+            ].unique()
+            if len(user_score) == 0:
                 continue  # the result is empty list, skip this user
-            nlg = grades_df[grades_df["userID"] == user_id]["nlg"].unique()[0]
+            nlg = user_score[0]
+            if np.isnan(nlg):
+                users_with_nan_nlg.append(user_id)
             prob_lvl_feature_df.iat[i, reward_col_location] = nlg
+
+    if len(users_with_nan_nlg):
+        print(
+            f"{Fore.RED}"
+            f"{semester_name}: The following users have a NaN NLG score: {users_with_nan_nlg}"
+            f"{Style.RESET_ALL}"  # this is not a warnings.warn message since this may be expected
+        )
+
+    # keep only the users that have a valid NLG score
+    prob_lvl_feature_df = prob_lvl_feature_df[
+        ~prob_lvl_feature_df["userID"].isin(users_with_nan_nlg)
+    ]
+
     # save the problem-level training data
     print(
         f"{Fore.GREEN}"

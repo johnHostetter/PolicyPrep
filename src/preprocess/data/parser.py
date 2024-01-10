@@ -23,7 +23,7 @@ def data_frame_to_d3rlpy_dataset(
     problem_id: str,
     decision_info_df: Union[None, pd.DataFrame] = None,
     config: Union[None, Config] = None,
-) -> d3rlpy.dataset.MDPDataset:
+) -> (d3rlpy.dataset.MDPDataset, pd.DataFrame):
     """
     Convert the features dataframe to a MDPDataset.
 
@@ -65,7 +65,8 @@ def data_frame_to_d3rlpy_dataset(
     # find if anyone has nan for delayed reward
     group_by = list(features_df.groupby(by="userID"))
     delayed_rewards = [
-        group_by[idx][1].reward.iloc[-1] for idx in range(len(features_df.userID.unique()))
+        group_by[idx][1].reward.iloc[-1]
+        for idx in range(len(features_df.userID.unique()))
     ]
     num_users_with_nan = np.sum(np.isnan(delayed_rewards))
     if num_users_with_nan > 0:
@@ -80,9 +81,30 @@ def data_frame_to_d3rlpy_dataset(
         if np.isnan(delayed_rewards[idx])
     ]
     # check we found them all
-    assert len(users_with_nan) == num_users_with_nan
+    assert len(users_with_nan) == num_users_with_nan, (
+        f"Number of users with NaN delayed rewards: {num_users_with_nan} "
+        f"!= number of users with NaN delayed rewards: {len(users_with_nan)}"
+    )
     # remove them from the dataset
     features_df = features_df[~features_df["userID"].isin(users_with_nan)]
+    # check that they are removed
+    group_by = list(features_df.groupby(by="userID"))
+    assert (
+        np.sum(
+            np.isnan(
+                [
+                    group_by[idx][1].reward.iloc[-1]
+                    for idx in range(len(features_df.userID.unique()))
+                ]
+            )
+        )
+        == 0
+    ), "There are still users with NaN delayed rewards"
+
+    assert (
+        len(features_df)
+        > 0  # check records remain after eliminating users with NaN rewards
+    ), f"({problem_id}) The features_df has length {len(features_df)}; it should be greater than 0"
 
     if problem_id == "problem":  # problem-level
         state_features = config.data.features.problem
@@ -140,6 +162,9 @@ def data_frame_to_d3rlpy_dataset(
         # TODO: replace np.nan with the actual reward; for now, just use 0.0
         rewards = features_df["reward"].replace(np.nan, 0.0).values[:, None]
 
-    return d3rlpy.dataset.MDPDataset(
-        observations, actions, rewards, terminals, discrete_action=True
+    return (
+        d3rlpy.dataset.MDPDataset(
+            observations, actions, rewards, terminals, discrete_action=True
+        ),
+        features_df,
     )

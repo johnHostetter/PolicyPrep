@@ -5,12 +5,21 @@ import multiprocessing as mp
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
+
+import numpy as np
 import pandas as pd
+from alive_progress import alive_it
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 
 from YACS.yacs import Config
 from src.preprocess.data.selection import get_most_recent_file
 from src.preprocess.infernet.common import read_data
 from src.utilities.reproducibility import load_configuration, path_to_project_root
+
+colorama_init()  # initialize colorama
 
 
 def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
@@ -39,6 +48,13 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
     problems = problem_data.problem.values
     infer_rewards = problem_data.reward.values
 
+    assert len(user_ids) == len(problems) == len(infer_rewards)  # sanity check
+    assert len(user_list) == len(set(user_ids))  # sanity check
+    assert np.sum(np.isnan(infer_rewards)) == 0, (
+        "Catastrophic failure! Cannot propagate rewards to step-level data. There are nan values "
+        "in the inferred rewards. This should not happen and should be investigated."
+    )  # sanity check
+
     # create a dictionary of the form {user_id: {problem: reward}}
     # user_problem_reward = {
     #     user_id: {problem[:-1] if problem.endswith("w") else problem: infer_reward}
@@ -63,7 +79,11 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
     # with mp.Pool(processes=num_workers) as pool:
     for file in exercise_file_path_generator:
         if file.is_dir():
-            print(f"Skipping {file.name} (it is a directory)...")
+            print(
+                f"{Fore.RED}"
+                f"Skipping {file.name} (it is a directory)..."
+                f"{Style.RESET_ALL}"
+            )
             continue
 
         step_data = read_data(
@@ -88,9 +108,11 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
     # pool.join()
 
     print(
+        f"{Fore.GREEN}"
         "Problem-level rewards have been propagated to all step-level data. "
         "Training of step-level InferNet models can now begin."
-    )
+        f"{Style.RESET_ALL}"
+    )  # notify the user that the script has successfully finished running
 
 
 def propagate_problem_reward_to_step_level_data(
@@ -115,10 +137,12 @@ def propagate_problem_reward_to_step_level_data(
         None
     """
     print(
+        f"{Fore.YELLOW}"
         f"Propagating inferred immediate rewards from problem-level to {file.name}..."
+        f"{Style.RESET_ALL}"
     )
     user_ids = step_data["userID"].unique()
-    for user in user_ids:
+    for user in alive_it(user_ids, force_tty=True):
         if (
             # skip users that are not in the problem-level data
             user in config.training.skip.users

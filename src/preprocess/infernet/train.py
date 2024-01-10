@@ -5,6 +5,11 @@ import argparse
 import multiprocessing as mp
 from typing import Tuple, List
 
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
+
 import torch
 import numpy as np
 import pandas as pd
@@ -30,6 +35,8 @@ from src.utilities.reproducibility import (
     set_random_seed,
     path_to_project_root,
 )
+
+pd.options.mode.chained_assignment = None  # default='warn'
 
 
 def train_infer_net(problem_id: str) -> None:
@@ -62,9 +69,6 @@ def train_infer_net(problem_id: str) -> None:
         NUM_OF_SELECTED_FEATURES + len(possible_actions) + 1  # + 1 for no-op action
     )
 
-    # Train the InferNet model
-    print("#####################")
-
     class InferNet(NeuralNetRegressor):
         def __init__(self, module, *args, criterion=torch.nn.MSELoss, **kwargs):
             super(InferNet, self).__init__(module, *args, criterion=criterion, **kwargs)
@@ -83,9 +87,9 @@ def train_infer_net(problem_id: str) -> None:
         model,
         criterion=torch.nn.MSELoss,
         optimizer=torch.optim.Adam,
-        lr=3e-6,
+        lr=3e-5,
         max_epochs=1000,
-        batch_size=1,
+        batch_size=64,
         # train_split=predefined_split(val_data),
         device="cuda" if torch.cuda.is_available() else "cpu",
         callbacks=[
@@ -193,14 +197,13 @@ def train_infer_net(problem_id: str) -> None:
     results_df = original_data[
         ~original_data.reward.notna()
     ]  # remove the rows w/ delayed reward
+    assert results_df.shape[0] == predictions.reshape(-1, 1).shape[0]
     results_df["reward"] = predictions.reshape(-1, 1)
 
     # save the predictions
     output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
     output_directory.mkdir(parents=True, exist_ok=True)
-    original_data.to_csv(
-        output_directory / f"{problem_id}_{iteration}.csv", index=False
-    )
+    results_df.to_csv(output_directory / f"{problem_id}_{iteration}.csv", index=False)
 
     # make the directory to save the model and loss data
     path_to_models = path_to_project_root() / "models" / "infernet"
@@ -219,7 +222,11 @@ def train_infer_net(problem_id: str) -> None:
         {"model": model.state_dict(), "optimizer": optimizer.state_dict()},
         path_to_checkpoints / f"{problem_id}_{iteration}.pt",
     )  # we can use a dictionary to save any arbitrary information (e.g., lr_scheduler)
-    print(f"Done training InferNet for {problem_id}.")
+    print(
+        f"{Fore.GREEN}"
+        f"Saved model to {path_to_models / f'{problem_id}_{iteration}.pt'}"
+        f"{Style.RESET_ALL}"
+    )
 
 
 def infernet_setup(problem_id: str) -> Tuple[bool, MDPDataset, pd.DataFrame]:
@@ -240,7 +247,8 @@ def infernet_setup(problem_id: str) -> Tuple[bool, MDPDataset, pd.DataFrame]:
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id
     original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
-    mdp_dataset = data_frame_to_d3rlpy_dataset(original_data, problem_id)
+    # the following function will create a MDPDataset as well as further clean the data once more
+    mdp_dataset, original_data = data_frame_to_d3rlpy_dataset(original_data, problem_id)
     return is_problem_level, mdp_dataset, original_data
 
 
@@ -279,13 +287,21 @@ def train_step_level_models(
     """
     # with mp.Pool(processes=args.num_workers) as pool:
     for problem_id in config.training.problems:
-        print(f"Training the InferNet model for {problem_id}...")
+        print(
+            f"{Fore.YELLOW}"
+            f"Training the InferNet model for {problem_id}..."
+            f"{Style.RESET_ALL}"
+        )
         if problem_id not in config.training.skip.problems:
             train_infer_net(f"{problem_id}(w)")
             # pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
         # pool.close()
         # pool.join()
-    print("All processes finished for training step-level InferNet models.")
+    print(
+        f"{Fore.GREEN}"
+        "All processes finished for training step-level InferNet models."
+        f"{Style.RESET_ALL}"
+    )
 
 
 if __name__ == "__main__":

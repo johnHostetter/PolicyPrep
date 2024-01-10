@@ -116,7 +116,7 @@ def move_and_convert_data(file: Path, problem_id: str) -> None:
         to_replace=action_columns, value=action_encoding
     )
     # convert the data frame to a Markov Decision Process (MDP) dataset
-    mdp_dataset = data_frame_to_d3rlpy_dataset(
+    mdp_dataset, _ = data_frame_to_d3rlpy_dataset(
         features_df=data_frame, problem_id=problem_id
     )
     # save the MDP dataset to a .h5 file (the default format for D3RLPy)
