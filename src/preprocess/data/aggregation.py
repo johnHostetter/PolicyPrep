@@ -25,9 +25,18 @@ step-level trajectory. As a result, after training a problem-level LSTM, for eac
 the estimate problem-level NLG at each decision point is used to construct and predict the
 step-level immediate rewards.
 """
+import warnings
+from pathlib import Path
+
 import pandas as pd
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 
 from src.utilities.reproducibility import load_configuration, path_to_project_root
+
+colorama_init()  # initialize colorama
 
 
 def iterate_over_semester_data(subdirectory: str, problem_id: str) -> None:
@@ -50,26 +59,45 @@ def iterate_over_semester_data(subdirectory: str, problem_id: str) -> None:
     data_frames = []
     for semester_folder in semester_folder_path_generator:
         if not semester_folder.is_dir():
-            print(f"Skipping {semester_folder.name} (not a directory)...")
+            print(
+                f"{Fore.RED}"
+                f"Skipping {semester_folder.name} (not a directory)..."
+                f"{Style.RESET_ALL}"
+            )
             continue
         if " - " not in semester_folder.name:
-            print(f"Skipping {semester_folder.name} (invalid directory name)...")
+            print(
+                f"{Fore.RED}"
+                f"Skipping {semester_folder.name} (invalid directory name)..."
+                f"{Style.RESET_ALL}"
+            )
             continue
 
         # the name of the semester is the part of the folder name after the " - "
         # e.g. "10 - S21" -> "S21"; the part before the " - " is the folder ordering number
         (_, semester_name) = semester_folder.name.split(" - ")
-        print(f"Processing data for the {semester_name} semester...")
+        print(
+            f"{Fore.YELLOW}"
+            f"Processing data for the {semester_name} semester..."
+            f"{Style.RESET_ALL}"
+        )
 
         try:
             data_frame = pd.read_csv(semester_folder / f"{problem_id}.csv")
             data_frames.append(data_frame)
 
         except FileNotFoundError as file_not_found_error:
-            print(
-                f"Skipping {semester_folder.name} (no {file_not_found_error.filename} file "
-                f"found for this semester)..."
-            )
+            file_not_found: Path = Path(file_not_found_error.filename)
+            if (
+                file_not_found.name.replace(
+                    "(w).csv", ""
+                )  # e.g., ex222(w).csv -> ex222
+                not in config.training.skip.problems
+            ):
+                warnings.warn(
+                    f"{semester_name}: Skipping {semester_folder.name} for {file_not_found.name} "
+                    f"(no file found for this semester)..."
+                )  # this may be expected, so just warn and continue
             continue
 
     concat_dataframes_and_save(data_frames, problem_id)
@@ -86,7 +114,11 @@ def concat_dataframes_and_save(data_frames: list, problem_id: str) -> None:
     """
     if len(data_frames) > 0:
         data_frame = pd.concat(data_frames)
-        print(f"Data for {problem_id} has shape {data_frame.shape}")
+        print(
+            f"{Fore.GREEN}"
+            f"Data for {problem_id} has shape {data_frame.shape}"
+            f"{Style.RESET_ALL}"
+        )
 
         if (
             "problem" in problem_id
@@ -118,9 +150,17 @@ def aggregate_data_for_inferring_rewards():
     # iterate over the different problems
     for problem_id in problems:
         if problem_id == "problem":
-            print("Aggregating data for problem-level...")
+            print(
+                f"{Fore.GREEN}"
+                "Aggregating data for problem-level..."
+                f"{Style.RESET_ALL}"
+            )
         else:
-            print(f"Aggregating data for problem {problem_id}...")
+            print(
+                f"{Fore.GREEN}"
+                f"Aggregating data for problem {problem_id}..."
+                f"{Style.RESET_ALL}"
+            )
         iterate_over_semester_data("with_delayed_rewards", problem_id)
 
 

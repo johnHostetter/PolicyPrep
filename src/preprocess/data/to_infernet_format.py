@@ -6,13 +6,20 @@ folder, not the Experiment folder. The generated format of the training data is 
 InferNet code.
 """
 import sys
+import warnings
 from pathlib import Path
 from typing import Tuple, Union, List, Callable
 
 import pandas as pd
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 
 from YACS.yacs import Config
 from src.utilities.reproducibility import load_configuration, path_to_project_root
+
+colorama_init()  # initialize colorama
 
 
 def make_year_and_semester_int(semester: str) -> Union[Tuple[int, int], None]:
@@ -63,9 +70,7 @@ def add_users_to_skip_list(user_ids: List[int], config: Config) -> None:
         The modified configuration settings.
     """
     with config.unfreeze():
-        config.training.skip.users = tuple(
-            list(config.training.skip.users) + user_ids
-        )
+        config.training.skip.users = tuple(list(config.training.skip.users) + user_ids)
 
 
 def iterate_over_semester_data(
@@ -91,25 +96,37 @@ def iterate_over_semester_data(
     # iterate over the different semesters of training data
 
     semester_folder_path_generator = (
-            path_to_project_root() / "data" / subdirectory
+        path_to_project_root() / "data" / subdirectory
     ).glob("* - *")
     for semester_folder in semester_folder_path_generator:
         if not semester_folder.is_dir():
-            print(f"Skipping {semester_folder.name} (not a directory)...")
+            print(
+                f"{Fore.RED}"
+                f"Skipping {semester_folder.name} (not a directory)..."
+                f"{Style.RESET_ALL}"
+            )
             continue
         if " - " not in semester_folder.name:
-            print(f"Skipping {semester_folder.name} (invalid directory name)...")
+            warnings.warn(
+                f"{Fore.RED}"
+                f"Skipping {semester_folder.name} (invalid directory name)..."
+                f"{Style.RESET_ALL}"
+            )
             continue
 
         # the name of the semester is the part of the folder name after the " - "
         # e.g. "10 - S21" -> "S21"; the part before the " - " is the folder ordering number
         (_, semester_name) = semester_folder.name.split(" - ")
-        print(f"Processing data for the {semester_name} semester...")
+        print(
+            f"{Fore.YELLOW}"
+            f"Processing data for the {semester_name} semester..."
+            f"{Style.RESET_ALL}"
+        )
 
         try:
             function_to_perform(semester_folder, semester_name, config)
         except FileNotFoundError as file_not_found_error:
-            print(
+            warnings.warn(
                 f"Skipping {semester_folder.name} (no {file_not_found_error.filename} file "
                 f"found for this semester)..."
             )
@@ -135,32 +152,33 @@ def convert_data_format(
     year_int, semester_int = make_year_and_semester_int(semester_name)
 
     # load the grades data
-    path_to_grades_directory = path_to_project_root() / "data" / "raw" / "Scores"
+    path_to_grades_directory = path_to_project_root() / "data" / "clean" / "Scores"
     try:
         grades_df = pd.read_csv(
             str(path_to_grades_directory / f"{config.data.grades.name}.csv"),
             header=0,
         )
     except FileNotFoundError:
-        print("Pipeline cannot proceed (no grades file found).")
-        sys.exit(1)
+        raise UserWarning("The pipeline cannot proceed (no grades file found).")
 
     # get the substep info dataframe
-    substep_info_df = get_substep_info_df(semester_folder, year_int, semester_int)
+    substep_info_df: pd.DataFrame = get_substep_info_df(
+        semester_folder, year_int, semester_int
+    )
     # make the output directories for the training data
     output_directory = make_data_subdirectory(
         "with_delayed_rewards", semester_folder.name
     )
     # get the problems for the semester
     # need to prepare problem-level training data with action and reward columns
-    prob_features_df = get_features_dataframe(
+    prob_features_df: pd.DataFrame = get_features_dataframe(
         semester_folder,
         year_int,
         semester_int,
         columns=config.data.features.basic + config.data.features.problem,
     )
     # need to prepare step-level training data with action column
-    step_features_df = get_features_dataframe(
+    step_features_df: pd.DataFrame = get_features_dataframe(
         semester_folder,
         year_int,
         semester_int,
@@ -174,14 +192,10 @@ def convert_data_format(
         prob_features_df,
         substep_info_df,
         grades_df,
-        config
+        config,
     )
     convert_step_level_format(
-        output_directory,
-        semester_name,
-        step_features_df,
-        substep_info_df,
-        config
+        output_directory, semester_name, step_features_df, substep_info_df, config
     )
 
 
@@ -243,9 +257,9 @@ def get_problems(substep_info_df: pd.DataFrame) -> List[str]:
         problem_id
         for problem_id in problems
         if (
-                problem_id[-1] != "w"
-                and "ex222" not in problem_id
-                and "ex144" not in problem_id
+            problem_id[-1] != "w"
+            and "ex222" not in problem_id
+            and "ex144" not in problem_id
         )
     ]  # exclude word problems and ex222 and ex144 which won't be trained for step-level
     return problems
@@ -298,7 +312,7 @@ def convert_problem_level_format(
     prob_features_df: pd.DataFrame,
     substep_info_df: pd.DataFrame,
     grades_df: pd.DataFrame,
-    config: Config
+    config: Config,
 ) -> None:
     """
     Convert the problem-level data to the format required by the training scripts.
@@ -316,10 +330,10 @@ def convert_problem_level_format(
     """
     prob_features_df = prob_features_df[
         prob_features_df["userID"] >= minimum_id(semester_name)
-        ]
+    ]
     substep_info_df = substep_info_df[
         substep_info_df["userID"] >= minimum_id(semester_name)
-        ]
+    ]
     prob_lvl_feature_df = prob_features_df[
         prob_features_df["decisionPoint"].isin(["probStart", "probEnd"])
     ]
@@ -327,7 +341,7 @@ def convert_problem_level_format(
         prob_lvl_feature_df[
             (prob_lvl_feature_df["decisionPoint"] == "probEnd")
             & (~prob_lvl_feature_df["problem"].isin(["ex252", "ex252w"]))
-            ].index,
+        ].index,
         inplace=True,
     )
 
@@ -339,13 +353,17 @@ def convert_problem_level_format(
 
     # eliminate the data that has an insufficient number of row entries
     grouped_by_user_prob_lvl_features_df: List[pd.DataFrame] = [
-        group for _, group in prob_lvl_feature_df.groupby(by="userID")
-        if len(group) == (len(config.training.problems) + 1)  # the + 1 accounts for the probEnd row
+        group
+        for _, group in prob_lvl_feature_df.groupby(by="userID")
+        if len(group)
+        == (len(config.training.problems) + 1)  # the + 1 accounts for the probEnd row
     ]
     # save the users that have insufficient data associated with them
     user_ids_to_be_removed: List[int] = [
-        int(user_id) for user_id, group in prob_lvl_feature_df.groupby(by="userID")
-        if len(group) < (len(config.training.problems) + 1)  # the + 1 accounts for the probEnd row
+        int(user_id)
+        for user_id, group in prob_lvl_feature_df.groupby(by="userID")
+        if len(group)
+        < (len(config.training.problems) + 1)  # the + 1 accounts for the probEnd row
     ]
     # mark these users to be skipped later
     add_users_to_skip_list(user_ids_to_be_removed, config)
@@ -364,7 +382,7 @@ def convert_problem_level_format(
             unique_actions = substep_info_df[
                 (substep_info_df["userID"] == user_id)
                 & (substep_info_df["problem"] == problem)
-                ]["substepMode"].unique()
+            ]["substepMode"].unique()
             if len(unique_actions) == 2:
                 prob_lvl_feature_df.iat[i, action_col_location] = "step_decision"
             else:
@@ -378,7 +396,11 @@ def convert_problem_level_format(
             nlg = grades_df[grades_df["userID"] == user_id]["nlg"].unique()[0]
             prob_lvl_feature_df.iat[i, reward_col_location] = nlg
     # save the problem-level training data
-    print(f"Saving problem-level training data for the {semester_name} semester...")
+    print(
+        f"{Fore.GREEN}"
+        f"{semester_name}: Saving problem-level training data..."
+        f"{Style.RESET_ALL}"
+    )
     prob_lvl_feature_df.to_csv(output_directory / "problem.csv", index=False)
 
 
@@ -387,7 +409,7 @@ def convert_step_level_format(
     semester_name: str,
     step_features_df: pd.DataFrame,
     substep_info_df: pd.DataFrame,
-    config: Config
+    config: Config,
 ) -> None:
     """
     Converts the step-level data into the format that can be used for training the step-level
@@ -409,7 +431,7 @@ def convert_step_level_format(
         step_lvl_feature_df = step_features_df[
             (step_features_df["decisionPoint"].isin(["stepStart", "probEnd"]))
             & (step_features_df["problem"].isin([problem, problem + "w"]))
-            ]
+        ]
         step_lvl_feature_df["action"] = ""
         step_lvl_feature_df["reward"] = ""
         action_col_location = step_lvl_feature_df.columns.get_loc("action")
@@ -423,15 +445,18 @@ def convert_step_level_format(
         )
         # find users that have insufficient data associated with them
         user_ids_to_be_removed: List[int] = [
-            int(user_id) for user_id, group in step_lvl_feature_df.groupby(by="userID")
+            int(user_id)
+            for user_id, group in step_lvl_feature_df.groupby(by="userID")
             if "probEnd" not in group.decisionPoint.unique()
         ]  # e.g., user 183114 from F18
         # mark these users to be skipped later
         add_users_to_skip_list(user_ids_to_be_removed, config)
         # user IDs below 100 are considered test users - remove them, as well as other 'bad' users
         user_ids = [
-            user_id for user_id in user_ids
-            if user_id >= minimum_id(semester_name) and user_id not in user_ids_to_be_removed
+            user_id
+            for user_id in user_ids
+            if user_id >= minimum_id(semester_name)
+            and user_id not in user_ids_to_be_removed
         ]
 
         # make them consistent with each other
@@ -447,44 +472,60 @@ def convert_step_level_format(
         if len(step_lvl_feature_df) != len(step_lvl_substep_df) + len(user_ids):
             new_step_lvl_substep_df: List[pd.DataFrame] = []
             new_step_lvl_feature_df: List[pd.DataFrame] = []
-            print(
-                f"{problem}: The feature and sub-step data size mismatch at the step-level."
+            print(  # this is not a warnings.warn message since this may be resolved
+                f"{Fore.RED}"
+                f"{semester_name}: The step-level feature and sub-step data size mismatch for {problem}."
+                f"{Style.RESET_ALL}"
             )
             # attempt to resolve the conflict/discrepancies
-            for user_id in user_ids:  # step through user-by-user, some issues can be w/ only 1 user
+            for (
+                user_id
+            ) in (
+                user_ids
+            ):  # step through user-by-user, some issues can be w/ only 1 user
                 # get the user's corresponding data
                 tmp_user_step_lvl_substep_df = step_lvl_substep_df[
                     step_lvl_substep_df["userID"] == user_id
-                    ]
+                ]
                 tmp_user_step_lvl_feature_df = step_lvl_feature_df[
                     step_lvl_feature_df["userID"] == user_id
-                    ]
+                ]
                 # one issue with past data (e.g., S23, F23) is repeated row entries - meaning, that
                 # there are multiple probEnd rows for the same problem, given a specific user
                 # this is problematic as there should only be ONE
                 decision_point_indices: List[int] = [
-                    decision_point_index for decision_point_index, decision_point in enumerate(
+                    decision_point_index
+                    for decision_point_index, decision_point in enumerate(
                         tmp_user_step_lvl_feature_df.decisionPoint.to_list()
                     )
                     if decision_point == "probEnd"
                 ]  # this code goes through and finds the data indices where probEnd occurs
                 # slice the user's data to only keep the first entries up until the first probEnd
-                tmp_user_step_lvl_substep_df: pd.DataFrame = tmp_user_step_lvl_substep_df.iloc[
-                                                             0:decision_point_indices[0]
-                                                             ]  # no + 1 needed (no probEnd row)
-                tmp_user_step_lvl_feature_df: pd.DataFrame = tmp_user_step_lvl_feature_df.iloc[
-                                                             0:(decision_point_indices[0] + 1)
-                                                             ]  # the + 1 includes our probEnd row
+                tmp_user_step_lvl_substep_df: pd.DataFrame = (
+                    tmp_user_step_lvl_substep_df.iloc[0 : decision_point_indices[0]]
+                )  # no + 1 needed (no probEnd row)
+                tmp_user_step_lvl_feature_df: pd.DataFrame = (
+                    tmp_user_step_lvl_feature_df.iloc[
+                        0 : (decision_point_indices[0] + 1)
+                    ]
+                )  # the + 1 includes our probEnd row
 
                 # check that the user's data is the size that we expect
-                if len(tmp_user_step_lvl_substep_df) + 1 == len(tmp_user_step_lvl_feature_df):
+                if len(tmp_user_step_lvl_substep_df) + 1 == len(
+                    tmp_user_step_lvl_feature_df
+                ):
                     # if it is, keep it
                     new_step_lvl_substep_df.append(tmp_user_step_lvl_substep_df)
                     new_step_lvl_feature_df.append(tmp_user_step_lvl_feature_df)
+                    print(
+                        f"{Fore.GREEN}"
+                        f"{semester_name}: Resolved data size mismatch for user {user_id}."
+                        f"{Style.RESET_ALL}"
+                    )
                 else:  # otherwise, we can't seem to use this user's data - something bad happened
                     # the current user has insufficient data logged (e.g., S23 user 231228)
-                    print(
-                        f"Skipping user {user_id}... invalid data."
+                    warnings.warn(
+                        f"{semester_name}: Skipping user {user_id} as they have invalid data."
                     )  # NOTE: this isn't a common occurrence, between S23 & F23, this happened ONCE
 
             # override the variables
@@ -505,7 +546,11 @@ def convert_step_level_format(
                 # discrepancies lie, for example, semesters S23 and F23 had duplicate data rows
                 # good luck! :)
             else:
-                print("Mismatch and conflicts resolved between feature and sub-step information!")
+                print(
+                    f"{Fore.GREEN}"
+                    f"{semester_name}: Mismatch and conflicts resolved between feature and sub-step information."
+                    f"{Style.RESET_ALL}"
+                )
 
         sub_step_counter = 0
         for i in range(len(step_lvl_feature_df)):
@@ -516,7 +561,7 @@ def convert_step_level_format(
             user_id_substep = step_lvl_substep_df.iloc[sub_step_counter]["userID"]
 
             if user_id_feature != user_id_substep:
-                print(
+                warnings.warn(
                     "UserID mismatch between feature_all and substep_info at step-level: "
                     "Feature -> "
                     + str(user_id_feature)
@@ -532,7 +577,9 @@ def convert_step_level_format(
 
         # save the step-level training data for this current problem
         print(
-            f"Saving {problem} step-level training data for the {semester_name} semester..."
+            f"{Fore.GREEN}"
+            f"{semester_name}: Saving {problem} step-level training data..."
+            f"{Style.RESET_ALL}"
         )
         step_lvl_feature_df.to_csv(output_directory / f"{problem}(w).csv", index=False)
 
@@ -540,7 +587,7 @@ def convert_step_level_format(
 if __name__ == "__main__":
     # example usage
     iterate_over_semester_data(
-        subdirectory="raw",
+        subdirectory="clean",
         function_to_perform=convert_data_format,
-        config=load_configuration("default_configuration.yaml")
+        config=load_configuration("default_configuration.yaml"),
     )

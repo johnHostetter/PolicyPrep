@@ -4,12 +4,20 @@ append them to the grades data if they are missing. This is necessary because th
 does not contain the grades for all students in the semester, so we need to look up the grades
 for the students that are missing.
 """
+import warnings
 from pathlib import Path
+from typing import List
 
 import pandas as pd
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 
 from YACS.yacs import Config
 from src.preprocess.data.to_infernet_format import make_year_and_semester_int
+
+colorama_init()  # initialize colorama
 
 
 def lookup_semester_grades_and_append_if_missing(
@@ -44,29 +52,30 @@ def lookup_semester_grades_and_append_if_missing(
         config.data.grades.lookup_missing
         and semester_name in config.data.grades.append_from
     ):
-        summary_df = pd.read_csv(semester_folder / "Summary" / "experiment_summary.csv")
-        semester_grades_df = pd.read_csv(
+        semester_summary_df: pd.DataFrame = pd.read_csv(
+            semester_folder / "Summary" / "experiment_summary.csv"
+        )
+        semester_grades_df: pd.DataFrame = pd.read_csv(
             semester_folder / "Summary" / "user_final_grades.csv"
         )[["userID", "questionID", "overallScoreNew"]]
-        # semester_folder.parent is the folder containing the semester folders (e.g., "data/raw")
-        path_to_grades_directory = semester_folder.parent / "Scores"
-        grades_df = pd.read_csv(
+        # semester_folder.parent is the folder containing the semester folders (e.g., "data/clean")
+        path_to_grades_directory: Path = semester_folder.parent / "Scores"
+        grades_df: pd.DataFrame = pd.read_csv(
             path_to_grades_directory / f"{config.data.grades.name}.csv"
         )
 
+        # the user IDs are not unique across semesters, so we need to add the year and semester
+        # this should have already been done, but just in case it hasn't, we will check here
         year_int, semester_int = make_year_and_semester_int(semester_name)
-        # if the minimum user ID is less than the minimum user ID for the semester, then add the
-        # year_int and semester_int to the user IDs
-        if summary_df["userID"].min() < year_int + semester_int:
-            summary_df["userID"] = summary_df["userID"] + year_int + semester_int
+        assert (
+            semester_summary_df["userID"].min() >= year_int + semester_int
+        ), "The year and semester have not been appended to the user IDs yet."
+        assert (
+            semester_grades_df["userID"].min() >= year_int + semester_int
+        ), "The year and semester have not been appended to the user IDs yet."
 
-        if semester_grades_df["userID"].min() < year_int + semester_int:
-            semester_grades_df["userID"] = (
-                semester_grades_df["userID"] + year_int + semester_int
-            )
-
-        if not summary_df["userID"].isin(grades_df["userID"]).any():
-            user_scores = []
+        if not semester_summary_df["userID"].isin(grades_df["userID"]).any():
+            user_scores: List[pd.DataFrame] = []
             for user_id, group in semester_grades_df.groupby("userID"):
                 if user_id not in grades_df["userID"].unique():
                     user_scores_df = (
@@ -97,15 +106,32 @@ def lookup_semester_grades_and_append_if_missing(
                     # reorder the columns
                     user_scores_df = user_scores_df[grades_df.columns]
                     # update the score metric we are interested in
-                    user_grade: float = summary_df[summary_df["userID"] == user_id][
-                        "NLG_post_SR"
-                    ].values[0]
+                    user_grade: float = semester_summary_df[
+                        semester_summary_df["userID"] == user_id
+                    ]["NLG_post_SR"].values[0]
                     user_scores_df[config.data.grades.metric] = user_grade
                     # append the user scores to the list of user scores
                     user_scores.append(user_scores_df)
             # append the user scores to the grades data frame
-            grades_df = pd.concat([grades_df, pd.concat(user_scores)])
+            new_user_scores_df: pd.DataFrame = pd.concat(user_scores)
+            print(
+                f"{Fore.GREEN}"
+                f"{semester_name}: Appending {len(new_user_scores_df)} "
+                f"users to the grades data frame..."
+                f"{Style.RESET_ALL}"
+            )
+            grades_df = pd.concat([grades_df, new_user_scores_df])
             # drop users with NaN score and save the grades data frame
+            num_of_users_with_nan_scores = grades_df[
+                grades_df[config.data.grades.metric].isna()
+            ].shape[0]
+            if num_of_users_with_nan_scores > 0:
+                warnings.warn(
+                    f"{Fore.RED}"
+                    f"Dropping {num_of_users_with_nan_scores} "
+                    f"users with NaN grades from the grades data frame..."
+                    f"{Style.RESET_ALL}"
+                )
             grades_df[grades_df[config.data.grades.metric].notna()].to_csv(
                 path_to_grades_directory / f"{config.data.grades.name}.csv", index=False
             )
