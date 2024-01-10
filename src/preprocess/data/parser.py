@@ -127,22 +127,33 @@ def data_frame_to_d3rlpy_dataset(
     grouped_features_by_user: List[pd.DataFrame] = [
         group_df for userID, group_df in features_df.groupby(by="userID")
     ]
-    episode_lengths = [len(group_df) for group_df in grouped_features_by_user]
+
+    def calculate_all_episode_lengths(
+        grouped_features_by_user: List[pd.DataFrame],
+    ) -> List[int]:
+        """
+        Calculate the length of each episode for each user.
+
+        Args:
+            grouped_features_by_user: The features dataframe grouped by user ID.
+
+        Returns:
+            The length of each episode for each user.
+        """
+        return [len(group_df) for group_df in grouped_features_by_user]
+
+    episode_lengths = calculate_all_episode_lengths(grouped_features_by_user)
     if min(episode_lengths) != max(episode_lengths):
         print(
             f"{Fore.YELLOW}"
             f"Warning: The episode lengths are not all the same. This is expected for step-level "
-            f"policies. \\The min episode length is {min(episode_lengths)} and the max episode "
+            f"policies. \nThe min episode length is {min(episode_lengths)} and the max episode "
             f"length is {max(episode_lengths)} for {problem_id}. Padding the episodes with zeros..."
             f"{Style.RESET_ALL}"
         )
 
         # then we must pad the episodes with zeros, we will modify the features_df in place
         max_episode_length = len(max(grouped_features_by_user, key=len))
-        # padded_grouped_features_by_user = [
-        #     df.reindex(range(max_episode_length), fill_value=0)
-        #     for df in grouped_features_by_user
-        # ]
 
         # create a new dataframe
         padded_user_features_dfs: List[pd.DataFrame] = []
@@ -198,6 +209,11 @@ def data_frame_to_d3rlpy_dataset(
 
         # replace the features dataframe with the padded features dataframe
         features_df = padded_features_df
+
+        # update the episode lengths to reflect the padding
+        episode_lengths = calculate_all_episode_lengths(
+            [group_df for userID, group_df in features_df.groupby(by="userID")]
+        )
 
         print(
             f"{Fore.GREEN}"

@@ -157,10 +157,10 @@ def train_infer_net(problem_id: str) -> None:
     )
 
     # too many zeros, so we only train on the non-zero rewards
-    indices = np.where(
-        mdp_dataset.rewards.reshape(len(mdp_dataset.episodes), (max_len + 1))[:, -1]
-        != 0.0
-    )[0]
+    # indices = np.where(
+    #     mdp_dataset.rewards.reshape(len(mdp_dataset.episodes), (max_len + 1))[:, -1]
+    #     != 0.0
+    # )[0]
     nn_reg.fit(
         np.concatenate(
             [
@@ -170,10 +170,12 @@ def train_infer_net(problem_id: str) -> None:
                 one_hot_encoded_actions[:, :-1, :],  # remove the last step
             ],
             axis=-1,
-        ).astype(np.float32)[indices],
-        mdp_dataset.rewards.reshape(len(mdp_dataset.episodes), (max_len + 1))[
-            indices
-        ],  # don't remove the last step here, it contains the delayed reward
+        ).astype(
+            np.float32
+        ),  # [indices],
+        mdp_dataset.rewards.reshape(len(mdp_dataset.episodes), (max_len + 1))  # [
+        # indices
+        # ],  # don't remove the last step here, it contains the delayed reward
     )
 
     history_df = pd.DataFrame(nn_reg.history)
