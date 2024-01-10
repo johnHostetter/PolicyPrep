@@ -8,14 +8,21 @@ MDPDataset is created by (optionally) merging the features dataframe with the de
 dataframe. The features dataframe contains the features for each step.
 """
 import warnings
-from typing import Union
+from typing import Union, List
 
 import d3rlpy
 import numpy as np
 import pandas as pd
+from alive_progress import alive_it
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 
 from YACS.yacs import Config
 from src.utilities.reproducibility import load_configuration
+
+colorama_init()  # initialize colorama
 
 
 def data_frame_to_d3rlpy_dataset(
@@ -117,7 +124,87 @@ def data_frame_to_d3rlpy_dataset(
 
     # --- begin making the MDPDataset ---
     # find the terminals (end of episodes)
-    episode_lengths = features_df.groupby(by=["userID"]).size().values
+    grouped_features_by_user: List[pd.DataFrame] = [
+        group_df for userID, group_df in features_df.groupby(by="userID")
+    ]
+    episode_lengths = [len(group_df) for group_df in grouped_features_by_user]
+    if min(episode_lengths) != max(episode_lengths):
+        print(
+            f"{Fore.YELLOW}"
+            f"Warning: The episode lengths are not all the same. This is expected for step-level "
+            f"policies. \\The min episode length is {min(episode_lengths)} and the max episode "
+            f"length is {max(episode_lengths)} for {problem_id}. Padding the episodes with zeros..."
+            f"{Style.RESET_ALL}"
+        )
+
+        # then we must pad the episodes with zeros, we will modify the features_df in place
+        max_episode_length = len(max(grouped_features_by_user, key=len))
+        # padded_grouped_features_by_user = [
+        #     df.reindex(range(max_episode_length), fill_value=0)
+        #     for df in grouped_features_by_user
+        # ]
+
+        # create a new dataframe
+        padded_user_features_dfs: List[pd.DataFrame] = []
+
+        # iterate over the users and populate the new dataframe
+        for user_df in alive_it(grouped_features_by_user):
+            # get the user ID for later
+            user_ids: np.ndarray = user_df["userID"].unique()
+            assert (
+                len(user_ids) == 1
+            ), f"Expected the user dataframe to have only one user ID, but got {user_ids}"
+            user_id: int = int(user_ids[0])
+
+            # find the number of rows to add
+            num_rows_to_add = max_episode_length - len(user_df)
+            # create a dataframe with the correct number of rows
+            zeros_df = pd.DataFrame(
+                np.zeros((num_rows_to_add, len(user_df.columns))),
+                columns=user_df.columns,
+            )
+            # append the zeros dataframe to the user dataframe
+            user_df = pd.concat(
+                # [user_df, zeros_df.replace(0, np.nan, inplace=False)],
+                [user_df, zeros_df],
+                ignore_index=True,
+                sort=False,
+            )
+            # update the user ID column
+            user_df["userID"] = user_id
+            # append the user dataframe to the list of padded users' features dataframes
+            padded_user_features_dfs.append(user_df)
+            # padded_features_df = pd.concat(
+            #     [padded_features_df, user_df], ignore_index=True, sort=False, axis=0
+            # )
+
+        # concatenate the padded user features dataframes
+        padded_features_df = pd.concat(
+            padded_user_features_dfs, ignore_index=True, sort=False, axis=0
+        )
+
+        # check that the operation was successful
+        assert min(
+            [len(group) for _, group in padded_features_df.groupby(by="userID")]
+        ) == max([len(group) for _, group in padded_features_df.groupby(by="userID")])
+        assert (
+            len(padded_features_df)
+            == len(features_df.userID.unique()) * max_episode_length
+        ), (
+            f"Expected the padded features dataframe to have length "
+            f"{len(features_df) * len(grouped_features_by_user)}, "
+            f"but got {len(padded_features_df)}"
+        )
+
+        # replace the features dataframe with the padded features dataframe
+        features_df = padded_features_df
+
+        print(
+            f"{Fore.GREEN}"
+            f"Finished padding the episodes with zeros for {problem_id}. "
+            f"{Style.RESET_ALL}"
+        )
+
     terminals = np.zeros(features_df.shape[0])
     idx = episode_lengths[0] - 1
     terminals[idx] = 1
