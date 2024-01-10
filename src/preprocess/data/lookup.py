@@ -109,3 +109,5 @@ def lookup_semester_grades_and_append_if_missing(
             grades_df[grades_df[config.data.grades.metric].notna()].to_csv(
                 path_to_grades_directory / f"{config.data.grades.name}.csv", index=False
             )
+        else:
+            pass

@@ -37,7 +37,7 @@ def propagate_problem_level_rewards_to_step_level(num_workers: int = 1) -> None:
     user_list = problem_data["userID"].unique()
     user_ids = problem_data.userID.values
     problems = problem_data.problem.values
-    infer_rewards = problem_data.inferred_reward.values
+    infer_rewards = problem_data.reward.values
 
     # create a dictionary of the form {user_id: {problem: reward}}
     # user_problem_reward = {

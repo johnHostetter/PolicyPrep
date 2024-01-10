@@ -12,12 +12,7 @@ import torch
 import numpy as np
 import pandas as pd
 from d3rlpy.dataset import MDPDataset
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.feature_selection import SelectKBest
-from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.preprocessing import Normalizer, MinMaxScaler
 from skorch import NeuralNetRegressor
-from skorch.callbacks import EarlyStopping
 
 from YACS.yacs import Config
 from soft.computing.blueprints.factory import SystematicDesignProcess
@@ -27,7 +22,7 @@ from soft.fuzzy.logic.controller.impl import ZeroOrderTSK, Mamdani
 from soft.computing.wrappers.temporal import TimeDistributed
 from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
 
-from src.preprocess.infernet.new_common import (
+from src.preprocess.infernet.common import (
     read_data,
     build_model,
     calc_max_episode_length,
@@ -57,9 +52,9 @@ def train_infer_net(problem_id: str) -> None:
     config = load_configuration()
     # set the random seed
     set_random_seed(seed=config.training.seed)
-    is_problem_level, mdp_dataset, original_data = infernet_setup(problem_id, config=config)
+    is_problem_level, mdp_dataset, normalized_data = infernet_setup(problem_id, config=config)
     max_len = calc_max_episode_length(mdp_dataset)
-    user_ids: List[int] = original_data["userID"].unique().tolist()
+    user_ids: List[int] = normalized_data["userID"].unique().tolist()
 
     # select the features and actions depending on if the data is problem-level or step-level
     state_features, possible_actions = get_features_and_actions(
@@ -68,7 +63,7 @@ def train_infer_net(problem_id: str) -> None:
 
     # create the buffer to train InferNet from
     infer_buffer = create_buffer(
-        original_data,
+        normalized_data,
         user_ids,
         config,
         is_problem_level=is_problem_level,
@@ -139,17 +134,16 @@ def train_infer_net(problem_id: str) -> None:
     # )
 
 
-    NUM_OF_SELECTED_FEATURES = 30
-    model, optimizer = build_model(NUM_OF_SELECTED_FEATURES + len(possible_actions) + 1)
+
+    # model, optimizer = build_model(len(state_features) + len(possible_actions))
     # model, optimizer = build_model(len(state_features))
 
     specifications = Specifications(
         t_norm="algebraic_product",
         number_of_variables={
-            # "input": len(state_features),
-            "input": NUM_OF_SELECTED_FEATURES,
-            "output": 1,
-            # "output": len(possible_actions),
+            "input": len(state_features),
+            # "output": 128,
+            "output": len(possible_actions),
         },
         number_of_terms={
             "input": 5,
@@ -165,7 +159,7 @@ def train_infer_net(problem_id: str) -> None:
 
     # FLC from network morphism
     flc = ZeroOrderTSK(
-        specifications=specifications, knowledge_base=None,
+        specifications=specifications, knowledge_base=knowledge_base,
         # disabled_parameters=["centers", "widths"]
     )
 
@@ -179,111 +173,11 @@ def train_infer_net(problem_id: str) -> None:
     # )
     infer_net = flc
 
-    # model = TimeDistributed(module=infer_net, batch_first=True).cuda()
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-1)
+    model = TimeDistributed(module=infer_net, batch_first=True).cuda()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-1)
 
     # Train the InferNet model
     print("#####################")
-
-    class InferNet(NeuralNetRegressor):
-        def __init__(
-            self,
-            module,
-            *args,
-            criterion=torch.nn.MSELoss,
-            **kwargs
-        ):
-            super(InferNet, self).__init__(
-                module,
-                *args,
-                criterion=criterion,
-                **kwargs
-            )
-
-        def get_loss(self, y_pred, y_true, X=None, training=False):
-            from skorch.utils import to_tensor
-            y_true = to_tensor(y_true, device=self.device)
-            # print(y_true.sum(dim=1))
-            return self.criterion_(y_pred.sum(1).flatten().to(self.device), y_true.sum(dim=1))
-
-
-    # create the skorch wrapper
-    nn_reg = InferNet(
-        # Net(len(input_features), 1),
-        model,
-        criterion=torch.nn.MSELoss,
-        optimizer=torch.optim.Adam,
-        lr=1e-5,
-        max_epochs=1000,
-        batch_size=4,
-        # train_split=predefined_split(val_data),
-        device="cuda" if torch.cuda.is_available() else "cpu",
-        callbacks=[
-            EarlyStopping(patience=10, monitor="valid_loss"),
-            # UpdateOptimizerCallback(),
-        ],
-    )
-
-    class Flatten(BaseEstimator, TransformerMixin):
-        def __init__(self):
-            pass
-
-        def fit(self, X, y=None):
-            return self
-
-        def transform(self, X):
-            return X.reshape(-1, X.shape[-1])
-
-    class MyReshape(BaseEstimator, TransformerMixin):
-        def __init__(self, shape):
-            self.shape = shape
-
-        def fit(self, X, y=None):
-            return self
-
-        def transform(self, X):
-            return X.reshape(self.shape)
-
-    pipeline = Pipeline(
-        [
-            ("flatten", Flatten()),
-            (
-                "scale",
-                # Normalizer(),  # MinMaxScaler(),
-                FeatureUnion(
-                    [
-                        ("minmax", MinMaxScaler()),
-                        ("normalize", Normalizer()),
-                    ]
-                ),
-            ),
-            ("select", SelectKBest(k=NUM_OF_SELECTED_FEATURES)),  # keep input size constant
-            ("resize", MyReshape(shape=(len(mdp_dataset.episodes), (max_len + 1), NUM_OF_SELECTED_FEATURES))),
-            # ("net", nn_reg),
-        ]
-    )
-
-    pipeline.fit(
-        mdp_dataset.observations,  #.reshape(len(mdp_dataset.episodes), (max_len + 1), len(state_features)),
-        mdp_dataset.rewards  #.reshape(len(mdp_dataset.episodes), (max_len + 1))
-    )
-
-    from sklearn.preprocessing import OneHotEncoder
-
-    one_hot_encoded_actions = OneHotEncoder().fit_transform(mdp_dataset.actions.reshape(-1, 1)).toarray().reshape(len(mdp_dataset.episodes), (max_len + 1), -1)
-
-    # one_hot_encoded_actions = np.zeros((len(mdp_dataset.episodes) * (max_len + 1), len(possible_actions)))
-    # one_hot_encoded_actions[np.arange(mdp_dataset.actions.size), mdp_dataset.actions] = 1
-    indices = np.where(mdp_dataset.rewards.reshape(len(mdp_dataset.episodes), (max_len + 1))[:, -1] != 0.0)[0]
-    nn_reg.fit(
-        np.concatenate([pipeline.transform(mdp_dataset.observations), one_hot_encoded_actions], axis=-1).astype(np.float32)[indices],
-        mdp_dataset.rewards.reshape(len(mdp_dataset.episodes), (max_len + 1))[indices]
-    )
-
-
-
-
-
     start_time = time.time()
     losses = []
     criterion = torch.nn.HuberLoss()
@@ -403,11 +297,11 @@ def infernet_setup(problem_id: str, config: Config) -> Tuple[bool, MDPDataset, p
     state_features, possible_actions = get_features_and_actions(
         config, is_problem_level
     )
-    # normalized_data = normalize_data(
-    #     original_data, problem_id, columns_to_normalize=state_features
-    # )
-    mdp_dataset = data_frame_to_d3rlpy_dataset(original_data, problem_id)
-    return is_problem_level, mdp_dataset, original_data
+    normalized_data = normalize_data(
+        original_data, problem_id, columns_to_normalize=state_features
+    )
+    mdp_dataset = data_frame_to_d3rlpy_dataset(normalized_data, problem_id)
+    return is_problem_level, mdp_dataset, normalized_data
 
 
 def get_features_and_actions(

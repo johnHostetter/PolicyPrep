@@ -7,6 +7,7 @@ contains the features, actions, rewards, terminals, and next features for each e
 MDPDataset is created by (optionally) merging the features dataframe with the decision info
 dataframe. The features dataframe contains the features for each step.
 """
+import warnings
 from typing import Union
 
 import d3rlpy
@@ -60,6 +61,28 @@ def data_frame_to_d3rlpy_dataset(
 
     # drop the users that we should skip (e.g., the users that have invalid data)
     features_df = features_df[~features_df["userID"].isin(config.training.skip.users)]
+
+    # find if anyone has nan for delayed reward
+    group_by = list(features_df.groupby(by="userID"))
+    delayed_rewards = [
+        group_by[idx][1].reward.iloc[-1] for idx in range(len(features_df.userID.unique()))
+    ]
+    num_users_with_nan = np.sum(np.isnan(delayed_rewards))
+    if num_users_with_nan > 0:
+        warnings.warn(
+            f"Number of users with NaN delayed rewards: {np.sum(np.isnan(delayed_rewards))}"
+        )
+
+    # find the users with NaN delayed rewards
+    users_with_nan = [
+        group_by[idx][0]
+        for idx in range(len(features_df.userID.unique()))
+        if np.isnan(delayed_rewards[idx])
+    ]
+    # check we found them all
+    assert len(users_with_nan) == num_users_with_nan
+    # remove them from the dataset
+    features_df = features_df[~features_df["userID"].isin(users_with_nan)]
 
     if problem_id == "problem":  # problem-level
         state_features = config.data.features.problem

@@ -22,6 +22,8 @@ def download_semester_data():
     gdown.download_folder(
         url=config.data.folder.name,
         output=str(path_to_project_root() / "data" / "raw"),
+        remaining_ok=True,
+        quiet=False,
     )
 
 

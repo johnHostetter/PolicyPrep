@@ -101,11 +101,15 @@ def build_model(num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
 
     model = TimeDistributed(module=neural_network, batch_first=True)
     # model = neural_network
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)  # the 'lr' is learning rate
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=1e-4
+    )  # the 'lr' is learning rate
     return model, optimizer
 
 
-def load_infernet_model(path_to_model: Path) -> TimeDistributed:  # TODO: rewrite this for PyTorch
+def load_infernet_model(
+    path_to_model: Path,
+) -> TimeDistributed:  # TODO: rewrite this for PyTorch
     """
     Load the InferNet model.
 
@@ -211,8 +215,6 @@ def create_buffer(
     infer_buffer: list = []
     for user in user_ids:
         if user in config.training.skip.users:
-            continue
-        if user < 210000:
             continue
         data_st = normalized_data[normalized_data["userID"] == user]
         if is_problem_level:
@@ -332,7 +334,12 @@ def infer_and_save_rewards(
 
     # Perform batched predictions
     # inf_rews = model.predict(batch_states_actions, batch_size=32, verbose=0)
-    inf_rews = model.cuda()(torch.Tensor(batch_states_actions[:, :, :-3]).cuda()).cpu().detach().numpy()
+    inf_rews = (
+        model.cuda()(torch.Tensor(batch_states_actions[:, :, :-3]).cuda())
+        .cpu()
+        .detach()
+        .numpy()
+    )
     # inf_rews = tf.squeeze(inf_rews, axis=-1)
 
     for i in range(len(infer_buffer)):

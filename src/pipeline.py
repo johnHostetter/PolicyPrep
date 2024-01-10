@@ -210,7 +210,7 @@ if __name__ == "__main__":
         download_semester_data()
 
     # find the semester data files and lookup the grades for each student and
-    # append them to the data files if they are missing
+    # append them to the data files if they are missing (this modifies files in data/raw)
     if args.step == 2 or (not args.run_specific and args.step <= 2):
         print(
             "(2): Looking up the grades for each student and appending them to the "

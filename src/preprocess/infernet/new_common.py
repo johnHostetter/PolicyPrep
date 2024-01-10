@@ -39,73 +39,36 @@ def read_data(
     return data[data["userID"].isin(selected_users)]
 
 
-def build_model(num_sas_features: int) -> (TimeDistributed, torch.optim.Adam):
+def build_model(in_features: int, hidden_dim=128) -> TimeDistributed:
     """
-    Build the InferNet model and its optimizer.
+    Build a time-distributed neural network.
 
     Args:
-        num_sas_features: The number of state and action features.
+        in_features: The number of input features.
+        hidden_dim: The number of hidden dimensions.
 
     Returns:
-        The InferNet model and the optimizer.
+        A time-distributed neural network.
     """
     neural_network: torch.nn.Sequential = torch.nn.Sequential(
-        # torch.nn.LSTM(
-        #     input_size=num_sas_features,
-        #     hidden_size=20,
-        #     num_layers=1,
-        #     batch_first=True,
-        # ),
-        # torch.nn.Linear(in_features=20, out_features=256, bias=True),
-        torch.nn.Linear(in_features=num_sas_features, out_features=128, bias=True),
-        # TimeDistributed(
-        #     module=torch.nn.Linear(in_features=num_sas_features, out_features=256, bias=True),
-        #     batch_first=True
-        # ),
+        torch.nn.Linear(in_features=in_features, out_features=hidden_dim, bias=True),
         torch.nn.PReLU(),
-        # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
-        # torch.nn.BatchNorm1d(num_features=128),
-        # torch.nn.Dropout(p=0.2),
-        torch.nn.Linear(in_features=128, out_features=128, bias=True),
+        torch.nn.Linear(in_features=hidden_dim, out_features=hidden_dim, bias=True),
         torch.nn.PReLU(),
-        # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
-        # torch.nn.BatchNorm1d(num_features=128),
-        # torch.nn.Dropout(p=0.5),
-        # torch.nn.Linear(in_features=512, out_features=512, bias=True),
-        # torch.nn.ReLU6(),
-        # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
-        # torch.nn.BatchNorm1d(num_features=128),
-        # torch.nn.Dropout(p=0.5),
-        # torch.nn.Linear(in_features=128, out_features=128, bias=True),
-        # TimeDistributed(
-        #     module=torch.nn.Linear(in_features=256, out_features=256, bias=True),
-        #     batch_first=True
-        # ),
-        # torch.nn.LeakyReLU(),
-        # # torch.nn.LazyBatchNorm1d(),  # lazy version infers the number of input features
-        # # torch.nn.BatchNorm1d(num_features=128),
-        # torch.nn.Dropout(p=0.5),
-        # torch.nn.Linear(in_features=256, out_features=256, bias=True),
-        # TimeDistributed(
-        #     module=torch.nn.Linear(in_features=256, out_features=128, bias=True),
-        #     batch_first=True
-        # ),
         torch.nn.PReLU(),
-        # torch.nn.Dropout(p=0.5),
-        torch.nn.Linear(in_features=128, out_features=1, bias=True),
-        # TimeDistributed(
-        #     module=torch.nn.Linear(in_features=128, out_features=3, bias=True),
-        #     batch_first=True
-        # ),
+        torch.nn.Linear(in_features=hidden_dim, out_features=1, bias=True),
     )
 
     model = TimeDistributed(module=neural_network, batch_first=True)
-    # model = neural_network
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)  # the 'lr' is learning rate
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=1e-4
+    )  # the 'lr' is learning rate
     return model, optimizer
 
 
-def load_infernet_model(path_to_model: Path) -> TimeDistributed:  # TODO: rewrite this for PyTorch
+def load_infernet_model(
+    path_to_model: Path,
+) -> TimeDistributed:  # TODO: rewrite this for PyTorch
     """
     Load the InferNet model.
 
@@ -198,21 +161,9 @@ def create_buffer(
         state_features = list(config.data.features.step)
         possible_actions = list(config.training.actions.step)
 
-    # attempting to scale target feature to improve stability
-    # normalized_data["reward"] = ((normalized_data["reward"].values - np.nanmin(normalized_data["reward"].values)) / (np.nanmax(normalized_data["reward"].values) - np.nanmin(normalized_data["reward"].values)))
-    # normalized_data["reward"] = (normalized_data["reward"].values - np.nanmean(normalized_data["reward"].values)) / np.nanstd(normalized_data["reward"].values)
-
-    # # one-hot encoding of actions; specify their order & add prefix; convert booleans to float
-    # actions_df: pd.DataFrame = pd.get_dummies(
-    #     normalized_data["action"]
-    # )[possible_actions].add_prefix("action_").astype(float)
-    # encoded_action_columns: list = list(actions_df.columns)
-    # normalized_data: pd.DataFrame = normalized_data.join(actions_df)
     infer_buffer: list = []
     for user in user_ids:
         if user in config.training.skip.users:
-            continue
-        if user < 210000:
             continue
         data_st = normalized_data[normalized_data["userID"] == user]
         if is_problem_level:
@@ -332,7 +283,12 @@ def infer_and_save_rewards(
 
     # Perform batched predictions
     # inf_rews = model.predict(batch_states_actions, batch_size=32, verbose=0)
-    inf_rews = model.cuda()(torch.Tensor(batch_states_actions[:, :, :-3]).cuda()).cpu().detach().numpy()
+    inf_rews = (
+        model.cuda()(torch.Tensor(batch_states_actions[:, :, :-3]).cuda())
+        .cpu()
+        .detach()
+        .numpy()
+    )
     # inf_rews = tf.squeeze(inf_rews, axis=-1)
 
     for i in range(len(infer_buffer)):
