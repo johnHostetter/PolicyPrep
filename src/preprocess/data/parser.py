@@ -28,6 +28,7 @@ colorama_init()  # initialize colorama
 def data_frame_to_d3rlpy_dataset(
     features_df: pd.DataFrame,
     problem_id: str,
+    padding: bool = False,
     decision_info_df: Union[None, pd.DataFrame] = None,
     config: Union[None, Config] = None,
 ) -> (d3rlpy.dataset.MDPDataset, pd.DataFrame):
@@ -37,6 +38,7 @@ def data_frame_to_d3rlpy_dataset(
     Args:
         features_df: The features dataframe for the given problem_id.
         problem_id: The problem ID, such as "problem" or "exc137".
+        padding: Whether to pad episodes with zeros. Defaults to False; InferNet expects padding.
         decision_info_df: The decision info dataframe for the given problem_id. Defaults to None. If
         None, then the decision info dataframe is not merged with the features dataframe.
         config: The configuration file. Defaults to None. If None, then the default configuration
@@ -70,6 +72,7 @@ def data_frame_to_d3rlpy_dataset(
     features_df = features_df[~features_df["userID"].isin(config.training.skip.users)]
 
     # find if anyone has nan for delayed reward
+    # (has no effect if run *after* rewards have been inferred, as intended)
     group_by = list(features_df.groupby(by="userID"))
     delayed_rewards = [
         group_by[idx][1].reward.iloc[-1]
@@ -143,7 +146,7 @@ def data_frame_to_d3rlpy_dataset(
         return [len(group_df) for group_df in grouped_features_by_user]
 
     episode_lengths = calculate_all_episode_lengths(grouped_features_by_user)
-    if min(episode_lengths) != max(episode_lengths):
+    if min(episode_lengths) != max(episode_lengths) and padding:
         print(
             f"{Fore.YELLOW}"
             f"Warning: The episode lengths are not all the same. This is expected for step-level "
@@ -240,7 +243,7 @@ def data_frame_to_d3rlpy_dataset(
         )
     # replace all the NaNs with "no-action"
     features_df[action_column] = features_df[action_column].replace(np.nan, "no-action")
-    # 0 is problem (or PSFWE), 1 is step_decision, 2 is example (WEFWE), 3 is no-action
+    # 0 is problem (or PSFWE), 1 is example (WEFWE), 2 is step_decision, 3 is no-action
     # PSFWE -> problem, WEFWE -> example
     # these values were created to show the exercise as a problem-solving (or worked example),
     # but record the data as if it were a faded worked example (step_decision); this was done
@@ -248,13 +251,13 @@ def data_frame_to_d3rlpy_dataset(
     features_df["action"] = features_df["action"].replace(
         to_replace=[
             "problem",
-            "step_decision",
-            "example",
             "PSFWE",
+            "example",
             "WEFWE",
+            "step_decision",
             "no-action",
         ],
-        value=[0, 1, 2, 0, 2, 3],
+        value=[0, 0, 1, 1, 2, 3],
     )
     actions = features_df[action_column].values[:, None]
 

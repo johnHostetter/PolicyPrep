@@ -6,14 +6,15 @@ It also contains the necessary functions and logic behind parsing the arguments 
 pipeline script. For readability, it is isolated from the pipeline script, but it is not used
 elsewhere.
 """
+import os
 import random
 import pathlib
 import argparse
 from typing import Union
 import multiprocessing as mp
 
+import torch
 import numpy as np
-import tensorflow as tf
 
 from YACS.yacs import Config
 
@@ -26,9 +27,11 @@ def set_random_seed(seed: int = 0) -> None:
         seed: The random seed to set.
     """
 
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
-    tf.random.set_seed(seed)
 
 
 def path_to_project_root() -> pathlib.Path:

@@ -2,6 +2,7 @@
 This file is used to train the InferNet model for the problem level data.
 """
 import argparse
+import pickle
 import multiprocessing as mp
 from typing import Tuple, List
 
@@ -16,10 +17,10 @@ import pandas as pd
 from d3rlpy.dataset import MDPDataset
 from skorch import NeuralNetRegressor
 from skorch.callbacks import EarlyStopping
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.feature_selection import SelectKBest
 from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import Normalizer, MinMaxScaler
 
 from YACS.yacs import Config
@@ -37,6 +38,7 @@ from src.utilities.reproducibility import (
 )
 
 pd.options.mode.chained_assignment = None  # default='warn'
+colorama_init(autoreset=True)  # initialize colorama
 
 
 def train_infer_net(problem_id: str) -> None:
@@ -199,26 +201,88 @@ def train_infer_net(problem_id: str) -> None:
     results_df = original_data[
         ~original_data.reward.notna()
     ]  # remove the rows w/ delayed reward
-    assert results_df.shape[0] == predictions.reshape(-1, 1).shape[0]
-    results_df["reward"] = predictions.reshape(-1, 1)
+    if is_problem_level:
+        reshaped_predictions = predictions.reshape(-1, 1)
+    else:
+        reshaped_predictions = np.concatenate(
+            [
+                predictions[
+                    user_idx, : len(group_df), :
+                ]  # slice off predictions made on padding
+                for user_idx, (user_id, group_df) in enumerate(
+                    results_df.groupby(by="userID")
+                )
+            ],
+            axis=0,  # stack them on the row axis
+        )
+    assert results_df.shape[0] == reshaped_predictions.shape[0]
+    results_df["reward"] = reshaped_predictions
+
+    ################################################################################################
+    # The following code is used to save data and models to disk.                                  #
+    ################################################################################################
 
     # save the predictions
     output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
     output_directory.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(output_directory / f"{problem_id}_{iteration}.csv", index=False)
+    print(
+        f"{Fore.GREEN}"
+        f"Saved predictions to {output_directory / f'{problem_id}_{iteration}.csv'}"
+        f"{Style.RESET_ALL}"
+    )
 
-    # make the directory to save the model and loss data
-    path_to_models = path_to_project_root() / "models" / "infernet"
-    path_to_models.mkdir(parents=True, exist_ok=True)
+    # make the directory to save the loss data
+    path_to_loss_data = path_to_project_root() / "data" / "infernet" / "loss"
+    path_to_loss_data.mkdir(parents=True, exist_ok=True)
 
     # save the history (e.g., loss data)
-    history_df.to_csv(
-        path_to_models / f"loss_{problem_id}_{iteration}.csv", index=False
+    history_df.to_csv(path_to_loss_data / f"{problem_id}_{iteration}.csv", index=False)
+    print(
+        f"{Fore.GREEN}"
+        f"Saved loss data to {path_to_loss_data / f'{problem_id}_{iteration}.csv'}"
+        f"{Style.RESET_ALL}"
     )
+
+    # save the scaler
+    scaler_directory = path_to_project_root() / "models" / "infernet" / "scalers"
+    scaler_directory.mkdir(parents=True, exist_ok=True)
+    pickle.dump(
+        pipeline[1:-1], open(scaler_directory / f"{problem_id}_{iteration}.pkl", "wb")
+    )  # don't save the flatten and reshape steps (they are not needed for inference)
+    print(
+        f"{Fore.GREEN}"
+        f"Saved scaler to {scaler_directory / f'{problem_id}_{iteration}.pkl'}"
+        f"{Style.RESET_ALL}"
+    )
+
+    # save the normalizer as a standalone operation (to be used later in policy induction)
+    normalizer_directory = path_to_project_root() / "models" / "normalizers"
+    normalizer_directory.mkdir(parents=True, exist_ok=True)
+    pickle.dump(
+        pipeline["scale"].named_transformers["normalize"],
+        open(normalizer_directory / f"{problem_id}_{iteration}.pkl", "wb"),
+    )
+    print(
+        f"{Fore.GREEN}"
+        f"Saved normalizer to {normalizer_directory / f'{problem_id}_{iteration}.pkl'}"
+        f"{Style.RESET_ALL}"
+    )
+
+    # make the directory to save the model
+    path_to_models = path_to_project_root() / "models" / "infernet" / "torch"
+    path_to_models.mkdir(parents=True, exist_ok=True)
+
     # save the model
     torch.save(model, path_to_models / f"{problem_id}_{iteration}.pt")
+    print(
+        f"{Fore.GREEN}"
+        f"Saved model to {path_to_models / f'{problem_id}_{iteration}.pt'}"
+        f"{Style.RESET_ALL}"
+    )
+
     # save a checkpoint, to restore model weights and optimizer settings if training fails
-    path_to_checkpoints = path_to_project_root() / "models" / "infernet" / "checkpoints"
+    path_to_checkpoints = path_to_project_root() / "data" / "infernet" / "checkpoints"
     path_to_checkpoints.mkdir(parents=True, exist_ok=True)
     torch.save(
         {"model": model.state_dict(), "optimizer": optimizer.state_dict()},
@@ -226,7 +290,7 @@ def train_infer_net(problem_id: str) -> None:
     )  # we can use a dictionary to save any arbitrary information (e.g., lr_scheduler)
     print(
         f"{Fore.GREEN}"
-        f"Saved model to {path_to_models / f'{problem_id}_{iteration}.pt'}"
+        f"Saved checkpoint to {path_to_checkpoints / f'{problem_id}_{iteration}.pt'}"
         f"{Style.RESET_ALL}"
     )
 
@@ -250,7 +314,9 @@ def infernet_setup(problem_id: str) -> Tuple[bool, MDPDataset, pd.DataFrame]:
     is_problem_level = "problem" in problem_id
     original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
     # the following function will create a MDPDataset as well as further clean the data once more
-    mdp_dataset, original_data = data_frame_to_d3rlpy_dataset(original_data, problem_id)
+    mdp_dataset, original_data = data_frame_to_d3rlpy_dataset(
+        original_data, problem_id, padding=True  # InferNet requires padding
+    )
     return is_problem_level, mdp_dataset, original_data
 
 
@@ -301,7 +367,7 @@ def train_step_level_models(
         # pool.join()
     print(
         f"{Fore.GREEN}"
-        "All processes finished for training step-level InferNet models."
+        "\nAll processes finished for training step-level InferNet models."
         f"{Style.RESET_ALL}"
     )
 

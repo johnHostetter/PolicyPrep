@@ -1,14 +1,18 @@
 """
 Use the DQN algorithm from d3rlpy to train a policy.
 """
-import multiprocessing as mp
 import pathlib
 from typing import List
+import multiprocessing as mp
 
 import torch
 import d3rlpy.algos
 import numpy as np
 import pandas as pd
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 from sklearn.model_selection import train_test_split
 
 from d3rlpy.dataset import MDPDataset, Episode
@@ -16,6 +20,8 @@ from d3rlpy.metrics import td_error_scorer, average_value_estimation_scorer
 
 from YACS.yacs import Config
 from src.utilities.reproducibility import load_configuration, path_to_project_root
+
+colorama_init()  # initialize the colorama module
 
 
 def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
@@ -38,7 +44,10 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
 
     with mp.Pool(processes=num_workers) as pool:
         path_to_policy_data_directory = (
-                path_to_project_root() / "data" / "for_policy_induction"
+            path_to_project_root()
+            / "data"
+            / "for_policy_induction"
+            / config.training.data.policy
         )
         for algo in config.training.algorithms:
             for problem_id in problems:
@@ -48,13 +57,21 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
                     problem_id += "(w)"
                 try:
                     path_to_data = (
-                            path_to_policy_data_directory / "d3rlpy" / f"{problem_id}.h5"
+                        path_to_policy_data_directory / "d3rlpy" / f"{problem_id}.h5"
                     )
                     if not path_to_data.exists():
-                        print(f"Skipping {path_to_data.name} (it does not exist)...")
+                        print(
+                            f"{Fore.RED}"
+                            f"Skipping {path_to_data.name} (it does not exist)..."
+                            f"{Style.RESET_ALL}"
+                        )
                         continue
                     if path_to_data.is_dir():
-                        print(f"Skipping {path_to_data.name} (it is a directory)...")
+                        print(
+                            f"{Fore.RED}"
+                            f"Skipping {path_to_data.name} (it is a directory)..."
+                            f"{Style.RESET_ALL}"
+                        )
                         continue
                     print(f"Using data from {path_to_data.name}...")
                     mdp_dataset = MDPDataset.load(str(path_to_data))
@@ -69,7 +86,7 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
                         mdp_dataset,
                         problem_id,
                         d3rlpy.algos.get_algo(algo, discrete=True),
-                        config
+                        config,
                     ],
                 )
                 x.get()  # check if any Exception has been thrown and display traceback
@@ -77,7 +94,9 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
         pool.join()
 
 
-def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, config: Config) -> None:
+def train_d3rlpy_policy(
+    mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, config: Config
+) -> None:
     """
     Train a DQN policy.
 
@@ -92,103 +111,113 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     """
     print(len(mdp_dataset.episodes))
     train_episodes, test_episodes = train_test_split(mdp_dataset, test_size=0.2)
+    n_state = train_episodes[0].observations.shape[-1]
+    knowledge_base = None  # this is only used for PySoft
 
     # train_episodes = train_episodes[:10]
     # test_episodes = test_episodes[:10]
 
-    import soft.computing.blueprints
-    from soft.computing.wrappers import CustomEncoderFactory as SoftEncoderFactory
-
-    soft_config = load_configuration(
-        path_to_project_root() / "PySoft" / "configurations" / "default_configuration.yaml"
-    )
-
-    # change default device for PyTorch to use the GPU if it is available
-    device = "cpu"
-    torch.set_default_device("cpu")
-    with soft_config.unfreeze():
-        soft_config.device = device  # reflect those changes in the Config object
-        if soft_config.fuzzy.t_norm.yager.lower() == "euler":
-            w_parameter = np.e
-        elif soft_config.fuzzy.t_norm.yager.lower() == "golden":
-            w_parameter = (1 + 5 ** 0.5) / 2
-        else:
-            w_parameter = float(soft_config.fuzzy.t_norm.yager)
-        soft_config.fuzzy.t_norm.yager = w_parameter
-        soft_config.fuzzy.rough.compatibility = False
-        soft_config.output.name = path_to_project_root() / "figures" / "CEW" / d3rlpy_alg.__name__ / problem_id
-        soft_config.clustering.distance_threshold = 0.17
-        soft_config.training.epochs = 300
-        soft_config.training.learning_rate = 3e-4
-        soft_config.fuzzy.t_norm.yager = np.e
-        soft_config.fuzzy_antecedents_generation.alpha = 0.2
-        soft_config.fuzzy_antecedents_generation.beta = 0.7
-    soft_config.output.name.mkdir(parents=True, exist_ok=True)
-    print(f"Using device: {soft_config.device}")
-
-    train_transitions = np.array(
-        [transition for episode in train_episodes for transition in episode.observations]
-    )  # outer loop is first, then inner loop
-    test_transitions = np.array(
-        [transition for episode in test_episodes for transition in episode.observations]
-    )  # outer loop is first, then inner loop
-    min_values = train_transitions.min(axis=0)
-    max_values = train_transitions.max(axis=0)
-    mask = min_values != max_values
-    train_transitions = torch.tensor(train_transitions[:, mask])
-    test_transitions = torch.tensor(test_transitions[:, mask])
-    self_organize = soft.computing.blueprints.clip_ecm_wm(
-        train_transitions,
-        # test_transitions,
-        config=soft_config
-    )
-
-    n_state = train_transitions.shape[-1]
-    torch.cuda.empty_cache()
-
-    knowledge_base = self_organize.start()
-    # path_to_kb_dirs = path_to_project_root() / "models" / "policies" / d3rlpy_alg.__name__ / "pysoft" / problem_id
-    # path_to_kb = list(path_to_kb_dirs.glob("*"))[-1]  # get the last entry
-    # from soft.computing.knowledge import KnowledgeBase
-    # knowledge_base = KnowledgeBase.load(path_to_kb)
+    # import soft.computing.blueprints
+    # from soft.computing.wrappers import CustomEncoderFactory as SoftEncoderFactory
     #
-    # # update the config for the knowledge_base
-    # knowledge_base.config = load_configuration()  # just load default
-    fuzzy_rules = knowledge_base.get_fuzzy_logic_rules()
-    premises = [len(fuzzy_rule.premise) for fuzzy_rule in fuzzy_rules]
+    # soft_config = load_configuration(
+    #     path_to_project_root() / "PySoft" / "configurations" / "default_configuration.yaml"
+    # )
+    #
+    # # change default device for PyTorch to use the GPU if it is available
+    # device = "cpu"
+    # torch.set_default_device("cpu")
+    # with soft_config.unfreeze():
+    #     soft_config.device = device  # reflect those changes in the Config object
+    #     if soft_config.fuzzy.t_norm.yager.lower() == "euler":
+    #         w_parameter = np.e
+    #     elif soft_config.fuzzy.t_norm.yager.lower() == "golden":
+    #         w_parameter = (1 + 5 ** 0.5) / 2
+    #     else:
+    #         w_parameter = float(soft_config.fuzzy.t_norm.yager)
+    #     soft_config.fuzzy.t_norm.yager = w_parameter
+    #     soft_config.fuzzy.rough.compatibility = False
+    #     soft_config.output.name = path_to_project_root() / "figures" / "CEW" / d3rlpy_alg.__name__ / problem_id
+    #     soft_config.clustering.distance_threshold = 0.17
+    #     soft_config.training.epochs = 300
+    #     soft_config.training.learning_rate = 3e-4
+    #     soft_config.fuzzy.t_norm.yager = np.e
+    #     soft_config.fuzzy_antecedents_generation.alpha = 0.2
+    #     soft_config.fuzzy_antecedents_generation.beta = 0.7
+    # soft_config.output.name.mkdir(parents=True, exist_ok=True)
+    # print(f"Using device: {soft_config.device}")
+
+    train_transitions = torch.Tensor(
+        np.array(
+            [
+                transition
+                for episode in train_episodes
+                for transition in episode.observations
+            ]
+        )  # outer loop is first, then inner loop
+    )
+    # test_transitions = np.array(
+    #     [transition for episode in test_episodes for transition in episode.observations]
+    # )  # outer loop is first, then inner loop
+    # min_values = train_transitions.min(axis=0)
+    # max_values = train_transitions.max(axis=0)
+    # mask = min_values != max_values
+    # train_transitions = torch.tensor(train_transitions[:, mask])
+    # test_transitions = torch.tensor(test_transitions[:, mask])
+    # self_organize = soft.computing.blueprints.clip_ecm_wm(
+    #     train_transitions,
+    #     # test_transitions,
+    #     config=soft_config
+    # )
+    #
+    # n_state = train_transitions.shape[-1]
+    # torch.cuda.empty_cache()
+    #
+    # knowledge_base = self_organize.start()
+    # # path_to_kb_dirs = path_to_project_root() / "models" / "policies" / d3rlpy_alg.__name__ / "pysoft" / problem_id
+    # # path_to_kb = list(path_to_kb_dirs.glob("*"))[-1]  # get the last entry
+    # # from soft.computing.knowledge import KnowledgeBase
+    # # knowledge_base = KnowledgeBase.load(path_to_kb)
+    # #
+    # # # update the config for the knowledge_base
+    # # knowledge_base.config = load_configuration()  # just load default
+    # fuzzy_rules = knowledge_base.get_fuzzy_logic_rules()
+    # premises = [len(fuzzy_rule.premise) for fuzzy_rule in fuzzy_rules]
+    # print(
+    #     f"Solving the system with "
+    #     f"{len(fuzzy_rules)} rules."
+    # )
+    # print(
+    #     f"Average (std. dev.) premises is "
+    #     f"{np.mean(premises)} ({np.std(premises)})"
+    # )
+    # if problem_id == "problem":
+    #     n_action = len(config.training.actions.problem)
+    # else:
+    #     n_action = len(config.training.actions.step)
+    #
+    # with soft_config.unfreeze():
+    #     soft_config.device = torch.device(
+    #         f"cuda:{torch.cuda.current_device()}" if torch.cuda.is_available() else "cpu"
+    #     )
+    #     torch.set_default_device(soft_config.device)
+    #
+    # knowledge_base.config = soft_config
+
+    # encoder_factory = SoftEncoderFactory(
+    #     knowledge_base=knowledge_base, feature_size=n_state, action_size=n_action
+    # )
+
     print(
-        f"Solving the system with "
-        f"{len(fuzzy_rules)} rules."
+        f"{Fore.YELLOW}"
+        f"Training a {d3rlpy_alg.__name__} policy for {problem_id}..."
+        f"{Style.RESET_ALL}"
     )
-    print(
-        f"Average (std. dev.) premises is "
-        f"{np.mean(premises)} ({np.std(premises)})"
-    )
-    if problem_id == "problem":
-        n_action = len(config.training.actions.problem)
-    else:
-        n_action = len(config.training.actions.step)
-
-    with soft_config.unfreeze():
-        soft_config.device = torch.device(
-            f"cuda:{torch.cuda.current_device()}" if torch.cuda.is_available() else "cpu"
-        )
-        torch.set_default_device(soft_config.device)
-
-    knowledge_base.config = soft_config
-
-    encoder_factory = SoftEncoderFactory(
-        knowledge_base=knowledge_base,
-        feature_size=n_state,
-        action_size=n_action
-    )
-
-    print(f"Training a {d3rlpy_alg.__name__} policy for {problem_id}...")
     algorithm = d3rlpy_alg(
-        encoder_factory=encoder_factory,
+        # encoder_factory=encoder_factory,
         use_gpu=torch.cuda.is_available(),
         learning_rate=3e-4,
-        batch_size=32,
+        batch_size=16,
         # alpha=0.1
     )
 
@@ -211,12 +240,38 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
             terminals[-1] = 1
         return terminals
 
-    path_to_logs = path_to_project_root() / "logs" / d3rlpy_alg.__name__ / problem_id
+    path_to_logs = (
+        path_to_project_root()
+        / "logs"
+        / config.training.data.policy
+        / d3rlpy_alg.__name__
+        / problem_id
+    )
     path_to_logs.mkdir(parents=True, exist_ok=True)
 
+    algorithm.fit(
+        train_episodes,
+        eval_episodes=test_episodes,
+        n_epochs=1,
+        logdir=str(path_to_logs),
+        scorers={
+            "td_error": td_error_scorer,
+            "value_scale": average_value_estimation_scorer,
+        },
+    )
     # algorithm.fit(
-    #     train_episodes,
-    #     eval_episodes=test_episodes,
+    #     MDPDataset(
+    #         train_transitions.detach().numpy(),
+    #         np.array([action for episode in train_episodes for action in episode.actions]),
+    #         np.array([reward for episode in train_episodes for reward in episode.rewards]),
+    #         np.array(make_terminals(train_episodes)),
+    #     ),
+    #     eval_episodes=MDPDataset(
+    #         test_transitions.detach().numpy(),
+    #         np.array([action for episode in test_episodes for action in episode.actions]),
+    #         np.array([reward for episode in test_episodes for reward in episode.rewards]),
+    #         np.array(make_terminals(test_episodes)),
+    #     ),
     #     n_epochs=100,
     #     logdir=str(path_to_logs),
     #     scorers={
@@ -224,27 +279,11 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     #         "value_scale": average_value_estimation_scorer,
     #     },
     # )
-    algorithm.fit(
-        MDPDataset(
-            train_transitions.detach().numpy(),
-            np.array([action for episode in train_episodes for action in episode.actions]),
-            np.array([reward for episode in train_episodes for reward in episode.rewards]),
-            np.array(make_terminals(train_episodes)),
-        ),
-        eval_episodes=MDPDataset(
-            test_transitions.detach().numpy(),
-            np.array([action for episode in test_episodes for action in episode.actions]),
-            np.array([reward for episode in test_episodes for reward in episode.rewards]),
-            np.array(make_terminals(test_episodes)),
-        ),
-        n_epochs=100,
-        logdir=str(path_to_logs),
-        scorers={
-            "td_error": td_error_scorer,
-            "value_scale": average_value_estimation_scorer,
-        },
+    print(
+        f"{Fore.GREEN}"
+        f"Finished training a {d3rlpy_alg.__name__} policy for {problem_id}..."
+        f"{Style.RESET_ALL}"
     )
-    print(f"Finished training a {d3rlpy_alg.__name__} policy for {problem_id}...")
 
     # from d3rlpy.ope import DiscreteFQE
     #
@@ -259,14 +298,26 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
     #         })
 
     # make the directory if it does not exist already and save the model
-    print(f"Saving the {d3rlpy_alg.__name__} policy for {problem_id}...")
+    print(
+        f"{Fore.YELLOW}"
+        f"Saving the {d3rlpy_alg.__name__} policy for {problem_id}..."
+        f"{Style.RESET_ALL}"
+    )
     for directory in ["d3rlpy", "trace", "pysoft", "onnx"]:
-        output_directory = path_to_project_root() / "models" / "policies"
+        output_directory = (
+            path_to_project_root() / "models" / "policies" / config.training.data.policy
+        )
         output_directory = output_directory / d3rlpy_alg.__name__ / directory
         output_directory.mkdir(parents=True, exist_ok=True)
         if directory == "d3rlpy":
             # save the algorithm model to the output directory
             algorithm.save_model(str(output_directory / f"{problem_id}.pt"))
+            print(
+                f"{Fore.GREEN}"
+                f"Finished saving the {d3rlpy_alg.__name__} policy "
+                f"for {problem_id} as a d3rlpy model..."
+                f"{Style.RESET_ALL}"
+            )
         elif directory == "trace":
             # # save the traced model to the output directory (for use in the web app)
             # max_length = max([len(episode.observations) for episode in train_episodes])
@@ -289,21 +340,52 @@ def train_d3rlpy_policy(mdp_dataset: MDPDataset, problem_id: str, d3rlpy_alg, co
 
             # save greedy-policy as TorchScript
             algorithm.save_policy(str(output_directory / f"{problem_id}.pt"))
+            print(
+                f"{Fore.GREEN}"
+                f"Saved the {d3rlpy_alg.__name__} policy for {problem_id} as a TorchScript model..."
+                f"{Style.RESET_ALL}"
+            )
         elif directory == "pysoft":
-            knowledge_base.save(str(output_directory / f"{problem_id}"))
+            if knowledge_base is not None:
+                knowledge_base.save(str(output_directory / f"{problem_id}"))
+                print(
+                    f"{Fore.GREEN}"
+                    f"Saved the {d3rlpy_alg.__name__} policy "
+                    f"for {problem_id} as a PySoft KnowledgeBase..."
+                    f"{Style.RESET_ALL}"
+                )
+            else:
+                # no need for the pysoft subdirectory - delete the directory if it exists
+                output_directory.rmdir()
         else:
             # save greedy-policy as ONNX
             if torch.cuda.is_available():
                 train_transitions = train_transitions.cuda()
-            # algorithm.save_policy(str(output_directory / f"{problem_id}.onnx"))
+            # algorithm.save_policy(
+            #     str(output_directory / f"{problem_id}.onnx")
+            # )  # this command should have worked, but it did not, so we use the following
             model = algorithm._impl._q_func.q_funcs[0]
-            model.eval()
+            model.eval()  # torch.nn.Parameters cannot & should not be traced in training mode
             torch.onnx.export(
                 model,  # the trained Q-function is in the 0'th index
-                torch.randn(1, n_state).cuda() if torch.cuda.is_available() else torch.randn(1, n_state),
-                output_directory / f"{problem_id}.onnx", opset_version=11
+                torch.randn(1, n_state).cuda()
+                if torch.cuda.is_available()
+                else torch.randn(1, n_state),
+                output_directory / f"{problem_id}.onnx",
+                opset_version=11,
+                input_names=["x"],
+                output_names=["y"],
             )
-    print(f"Finished saving the {d3rlpy_alg.__name__} policy for {problem_id}...")
+            print(
+                f"{Fore.GREEN}"
+                f"Saved the {d3rlpy_alg.__name__} policy for {problem_id} as an ONNX model..."
+                f"{Style.RESET_ALL}"
+            )
+    print(
+        f"{Fore.GREEN}"
+        f"Finished saving all files of the {d3rlpy_alg.__name__} policy for {problem_id}."
+        f"{Style.RESET_ALL}"
+    )
 
 
 if __name__ == "__main__":

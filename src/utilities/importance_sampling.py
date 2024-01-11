@@ -40,7 +40,7 @@ class ImportanceSampling(object):
             expert_count = 0
             for i in range(0, len(row_index)):
                 action = user_data.loc[row_index[i], "real_action"]
-                reward = user_data.loc[row_index[i], "inferred_reward"]
+                reward = user_data.loc[row_index[i], "reward"]
                 Qs = user_data.loc[row_index[i], Q_list].tolist()
 
                 user_sequence.append((action, reward, Qs))
