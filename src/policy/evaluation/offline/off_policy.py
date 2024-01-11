@@ -153,7 +153,7 @@ def evaluate_all_policies(config: Config = None) -> None:
             with alive_bar(
                 monitor=None,
                 stats=None,
-                title=f"Problem ID: {problem_id}",
+                title=f"ID: {problem_id}",
             ):
                 temp_ope_scores_df: pd.DataFrame = (
                     evaluate_policy_with_importance_sampling(

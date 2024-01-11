@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from d3rlpy.dataset import MDPDataset
 from skorch.callbacks import EarlyStopping
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.feature_selection import SelectKBest
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import Normalizer, MinMaxScaler
@@ -66,7 +66,7 @@ def train_infer_net(problem_id: str) -> None:
 
     print(
         f"{Fore.YELLOW}"
-        f"Problem ID: {problem_id} | The maximum length of an episode is {max_len}."
+        f"ID: {problem_id} | The maximum length of an episode is {max_len}."
         f"{Style.RESET_ALL}"
     )
 
@@ -100,6 +100,7 @@ def train_infer_net(problem_id: str) -> None:
                     [
                         ("minmax", MinMaxScaler()),
                         ("normalize", Normalizer()),
+                        ("standardize", StandardScaler()),
                     ]
                 ),
             ),
@@ -215,7 +216,7 @@ def train_infer_net(problem_id: str) -> None:
         f"{Style.RESET_ALL}"
     )
 
-    # save the scaler
+    # save the scaler as a standalone operation (to be used later if we want to reuse InferNet)
     scaler_directory = path_to_project_root() / "models" / "infernet" / "scalers"
     scaler_directory.mkdir(parents=True, exist_ok=True)
     pickle.dump(
@@ -223,22 +224,25 @@ def train_infer_net(problem_id: str) -> None:
     )  # don't save the flatten and reshape steps (they are not needed for inference)
     print(
         f"{Fore.GREEN}"
-        f"Saved scaler to {scaler_directory / f'{problem_id}_{iteration}.pkl'}"
+        f"Saved InferNet scaler to {scaler_directory / f'{problem_id}_{iteration}.pkl'}"
         f"{Style.RESET_ALL}"
     )
 
-    # save the normalizer as a standalone operation (to be used later in policy induction)
-    normalizer_directory = path_to_project_root() / "models" / "normalizers"
-    normalizer_directory.mkdir(parents=True, exist_ok=True)
-    pickle.dump(
-        pipeline["scale"].named_transformers["normalize"],
-        open(normalizer_directory / f"{problem_id}_{iteration}.pkl", "wb"),
-    )
-    print(
-        f"{Fore.GREEN}"
-        f"Saved normalizer to {normalizer_directory / f'{problem_id}_{iteration}.pkl'}"
-        f"{Style.RESET_ALL}"
-    )
+    # save the normalizer and minmax scalar as standalone operations
+    # (to be used later in policy induction)
+    for name, transformer in pipeline["scale"].transformer_list:
+        transformer_directory = path_to_project_root() / "models" / "scalers" / name
+        transformer_directory.mkdir(parents=True, exist_ok=True)
+        pickle.dump(
+            # pipeline["scale"].named_transformers["normalize"],
+            transformer,
+            open(transformer_directory / f"{problem_id}_{iteration}.pkl", "wb"),
+        )
+        print(
+            f"{Fore.GREEN}"
+            f"Saved {name} transformer to {transformer_directory / f'{problem_id}_{iteration}.pkl'}"
+            f"{Style.RESET_ALL}"
+        )
 
     # make the directory to save the model
     path_to_models = path_to_project_root() / "models" / "infernet" / "torch"
@@ -277,8 +281,8 @@ def infernet_setup(problem_id: str) -> Tuple[bool, MDPDataset, pd.DataFrame]:
     Returns:
         A tuple containing the following:
             is_problem_level: A boolean indicating if the data is problem-level or step-level.
-            mdp_dataset: The MDPDataset representation where the state features are normalized.
-            normalized_data: The normalized dataset.
+            mdp_dataset: The MDPDataset representation, where if it is step-level, the
+            observations have been padded such that each user has the same episode length.
     """
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id

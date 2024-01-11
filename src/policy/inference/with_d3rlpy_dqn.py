@@ -3,17 +3,21 @@ This script contains the code necessary to perform policy inference using D3RLPy
 produce the Q-values for each action for each state in the dataset. The Q-values are saved to a
 .csv file and may be used to facilitate policy evaluation.
 """
-from timeit import timeit
-
 import torch
 import d3rlpy.algos
 
 import pandas as pd
 from alive_progress import alive_bar
 from d3rlpy.dataset import MDPDataset
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 
 from YACS.yacs import Config
 from src.utilities.reproducibility import load_configuration, path_to_project_root
+
+colorama_init(autoreset=True)  # for cross-platform colored text in the terminal
 
 
 def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
@@ -100,11 +104,15 @@ def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
                         axis=1,
                     )
                 ).float()
-                print(problem)
-                print(f"shape of data: {sample_data.shape}")
+                print(
+                    f"{Fore.YELLOW}"
+                    f"Policy: {algorithm_str.upper()} | "
+                    f"Data: {config.training.data.policy.capitalize()} {tuple(sample_data.shape)}"
+                    f"{Style.RESET_ALL}"
+                )
                 dataloader = DataLoader(sample_data, batch_size=1)
                 q_values = []
-                with alive_bar(len(dataloader)) as bar:
+                with alive_bar(len(dataloader), title=f"ID: {problem}") as bar:
                     for batch in dataloader:
                         q_values.append(
                             q_function_implementation.run(
@@ -115,27 +123,27 @@ def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
                             # .numpy()
                         )
                         bar()
-                q_values = np.squeeze(np.array(q_values), axis=1)
-                assert q_values.shape[-1] == len(possible_actions)  # sanity check
+                    q_values = np.squeeze(np.array(q_values), axis=1)
+                    assert q_values.shape[-1] == len(possible_actions)  # sanity check
 
-                # TODO: check that the Q-values are correct for each action
-                q_values_df = pd.DataFrame(
-                    q_values,
-                    columns=[f"{action}_Q_value" for action in possible_actions],
-                )
-                results_df = pd.concat([dataset, q_values_df], axis=1)
-                path_to_output_directory = (
-                    path_to_project_root()
-                    / "data"
-                    / "for_policy_evaluation"
-                    / config.training.data.policy
-                    / algorithm_str
-                )
-                path_to_output_directory.mkdir(parents=True, exist_ok=True)
-                results_df.to_csv(
-                    path_to_output_directory / f"{problem}.csv",
-                    index=False,
-                )
+                    # TODO: check that the Q-values are correct for each action
+                    q_values_df = pd.DataFrame(
+                        q_values,
+                        columns=[f"{action}_Q_value" for action in possible_actions],
+                    )
+                    results_df = pd.concat([dataset, q_values_df], axis=1)
+                    path_to_output_directory = (
+                        path_to_project_root()
+                        / "data"
+                        / "for_policy_evaluation"
+                        / config.training.data.policy
+                        / algorithm_str
+                    )
+                    path_to_output_directory.mkdir(parents=True, exist_ok=True)
+                    results_df.to_csv(
+                        path_to_output_directory / f"{problem}.csv",
+                        index=False,
+                    )
 
 
 if __name__ == "__main__":

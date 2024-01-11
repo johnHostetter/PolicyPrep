@@ -73,8 +73,18 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
                             f"{Style.RESET_ALL}"
                         )
                         continue
-                    print(f"Using data from {path_to_data.name}...")
+                    print(
+                        f"{Fore.YELLOW}"
+                        f"Using data from {path_to_data.name}..."
+                        f"{Style.RESET_ALL}"
+                    )
                     mdp_dataset = MDPDataset.load(str(path_to_data))
+                    print(
+                        f"{Fore.YELLOW}"
+                        f"Using {len(mdp_dataset.episodes)} episodes of data to induce a policy "
+                        f"for {path_to_data.name}..."
+                        f"{Style.RESET_ALL}"
+                    )
 
                 except FileNotFoundError as file_not_found_error:
                     print(repr(file_not_found_error))
@@ -109,7 +119,6 @@ def train_d3rlpy_policy(
     Returns:
         None
     """
-    print(len(mdp_dataset.episodes))
     train_episodes, test_episodes = train_test_split(mdp_dataset, test_size=0.2)
     n_state = train_episodes[0].observations.shape[-1]
     knowledge_base = None  # this is only used for PySoft
