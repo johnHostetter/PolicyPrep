@@ -15,22 +15,22 @@ import torch
 import numpy as np
 import pandas as pd
 from d3rlpy.dataset import MDPDataset
-from skorch import NeuralNetRegressor
 from skorch.callbacks import EarlyStopping
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.feature_selection import SelectKBest
 from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import Normalizer, MinMaxScaler
 
 from YACS.yacs import Config
 from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
 
-from src.preprocess.infernet.new_common import (
+from src.preprocess.infernet.common import (
     read_data,
     build_model,
     calc_max_episode_length,
 )
+from src.preprocess.infernet.sklearn import Flatten, Reshape
+from src.preprocess.infernet.skorch import InferNet
 from src.utilities.reproducibility import (
     load_configuration,
     set_random_seed,
@@ -64,25 +64,16 @@ def train_infer_net(problem_id: str) -> None:
         config, is_problem_level
     )
 
-    print(f"{problem_id}: Max episode length is {max_len}")
-
-    NUM_OF_SELECTED_FEATURES = 30
-    model, optimizer = build_model(
-        NUM_OF_SELECTED_FEATURES + len(possible_actions) + 1  # + 1 for no-op action
+    print(
+        f"{Fore.YELLOW}"
+        f"Problem ID: {problem_id} | The maximum length of an episode is {max_len}."
+        f"{Style.RESET_ALL}"
     )
 
-    class InferNet(NeuralNetRegressor):
-        def __init__(self, module, *args, criterion=torch.nn.MSELoss, **kwargs):
-            super(InferNet, self).__init__(module, *args, criterion=criterion, **kwargs)
-
-        def get_loss(self, y_pred, y_true, X=None, training=False):
-            from skorch.utils import to_tensor
-
-            y_true = to_tensor(y_true, device=self.device)
-            # print(y_true.sum(dim=1))
-            return self.criterion_(
-                y_pred.sum(1).flatten().to(self.device), y_true.sum(dim=1)
-            )
+    NUM_OF_SELECTED_FEATURES = 30
+    model = build_model(
+        NUM_OF_SELECTED_FEATURES + len(possible_actions) + 1  # + 1 for no-op action
+    )
 
     # create the skorch wrapper
     nn_reg = InferNet(
@@ -98,26 +89,6 @@ def train_infer_net(problem_id: str) -> None:
             EarlyStopping(patience=10, monitor="valid_loss"),
         ],
     )
-
-    class Flatten(BaseEstimator, TransformerMixin):
-        def __init__(self):
-            pass
-
-        def fit(self, X, y=None):
-            return self
-
-        def transform(self, X):
-            return X.reshape(-1, X.shape[-1])
-
-    class MyReshape(BaseEstimator, TransformerMixin):
-        def __init__(self, shape):
-            self.shape = shape
-
-        def fit(self, X, y=None):
-            return self
-
-        def transform(self, X):
-            return X.reshape(self.shape)
 
     # data preprocessing pipeline (model has to be separate due to data reshaping)
     pipeline = Pipeline(
@@ -138,7 +109,7 @@ def train_infer_net(problem_id: str) -> None:
             ),  # keep input size constant
             (
                 "resize",
-                MyReshape(
+                Reshape(
                     shape=(
                         len(mdp_dataset.episodes),
                         (max_len + 1),
@@ -285,7 +256,7 @@ def train_infer_net(problem_id: str) -> None:
     path_to_checkpoints = path_to_project_root() / "data" / "infernet" / "checkpoints"
     path_to_checkpoints.mkdir(parents=True, exist_ok=True)
     torch.save(
-        {"model": model.state_dict(), "optimizer": optimizer.state_dict()},
+        {"model": model.state_dict(), "optimizer": nn_reg.optimizer_.state_dict()},
         path_to_checkpoints / f"{problem_id}_{iteration}.pt",
     )  # we can use a dictionary to save any arbitrary information (e.g., lr_scheduler)
     print(
@@ -301,8 +272,7 @@ def infernet_setup(problem_id: str) -> Tuple[bool, MDPDataset, pd.DataFrame]:
     set up the InferNet model for the step level data.
 
     Args:
-        problem_id:
-        config:
+        problem_id: A string that is either "problem" or the name of an exercise.
 
     Returns:
         A tuple containing the following:

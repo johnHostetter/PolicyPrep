@@ -171,10 +171,10 @@ def evaluate_all_policies(config: Config = None) -> None:
             / "for_analysis"
         )
         directory_path.mkdir(parents=True, exist_ok=True)
-        ope_scores_df.to_csv(directory_path / f"{algorithm_str}.csv")
+        ope_scores_df.to_csv(directory_path / f"{algorithm_str}.csv", index=False)
         print(
             f"{Fore.GREEN}"
-            f"{algorithm_str} | Evaluation complete; results saved to "
+            f"{algorithm_str.upper()} | Evaluation complete; results saved to "
             f"{directory_path / f'{algorithm_str}.csv'}"
             f"{Style.RESET_ALL}"
         )
