@@ -133,6 +133,10 @@ def train_d3rlpy_policy(
     n_state = train_episodes[0].observations.shape[-1]
     knowledge_base = None  # this is only used for PySoft
 
+    ################################################################################################
+    #              The following code is to create a neuro-fuzzy network with PySoft.              #
+    ################################################################################################
+
     # train_episodes = train_episodes[:10]
     # test_episodes = test_episodes[:10]
 
@@ -247,8 +251,9 @@ def train_d3rlpy_policy(
         knowledge_base=knowledge_base, feature_size=n_state, action_size=n_action
     )
 
-    # if problem_id in ["problem", "exc137(w)", "ex132a(w)"]:
-    #     return
+    ################################################################################################
+    #               The following code is to induce a policy with the d3rlpy library.              #
+    ################################################################################################
 
     print(
         f"{Fore.YELLOW}"
