@@ -1,5 +1,6 @@
 # Pyrenees Pipeline Project - .gitignore
 /data
+logs/
 figures/
 models/
 src/d3rlpy_logs
