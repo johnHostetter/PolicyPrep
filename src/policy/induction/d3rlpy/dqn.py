@@ -19,7 +19,17 @@ from d3rlpy.dataset import MDPDataset, Episode
 from d3rlpy.metrics import td_error_scorer, average_value_estimation_scorer
 
 from YACS.yacs import Config
+from src.policy.induction.d3rlpy.nas import modify_algorithm
 from src.utilities.reproducibility import load_configuration, path_to_project_root
+# the following are imports required for a closed-sourced library called PySoft
+# if you don't have PySoft, you need to comment out the following imports
+# and the code that uses them
+from soft.computing.wrappers.d3rlpy import (
+    CustomEncoderFactory as SoftEncoderFactory,
+    CustomMeanQFunctionFactory
+)
+from soft.computing.wrappers.supervised import SupervisedDataset
+from soft.computing.blueprints.factory import SystematicDesignProcess
 
 colorama_init()  # initialize the colorama module
 
@@ -127,34 +137,40 @@ def train_d3rlpy_policy(
     # test_episodes = test_episodes[:10]
 
     # import soft.computing.blueprints
-    # from soft.computing.wrappers import CustomEncoderFactory as SoftEncoderFactory
-    #
-    # soft_config = load_configuration(
-    #     path_to_project_root() / "PySoft" / "configurations" / "default_configuration.yaml"
-    # )
-    #
+
+    soft_config = load_configuration(
+        path_to_project_root()
+        / "PySoft"
+        / "configurations"
+        / "default_configuration.yaml"
+    )
+
     # # change default device for PyTorch to use the GPU if it is available
-    # device = "cpu"
+    device = "cpu"
     # torch.set_default_device("cpu")
-    # with soft_config.unfreeze():
-    #     soft_config.device = device  # reflect those changes in the Config object
-    #     if soft_config.fuzzy.t_norm.yager.lower() == "euler":
-    #         w_parameter = np.e
-    #     elif soft_config.fuzzy.t_norm.yager.lower() == "golden":
-    #         w_parameter = (1 + 5 ** 0.5) / 2
-    #     else:
-    #         w_parameter = float(soft_config.fuzzy.t_norm.yager)
-    #     soft_config.fuzzy.t_norm.yager = w_parameter
-    #     soft_config.fuzzy.rough.compatibility = False
-    #     soft_config.output.name = path_to_project_root() / "figures" / "CEW" / d3rlpy_alg.__name__ / problem_id
-    #     soft_config.clustering.distance_threshold = 0.17
-    #     soft_config.training.epochs = 300
-    #     soft_config.training.learning_rate = 3e-4
-    #     soft_config.fuzzy.t_norm.yager = np.e
-    #     soft_config.fuzzy_antecedents_generation.alpha = 0.2
-    #     soft_config.fuzzy_antecedents_generation.beta = 0.7
-    # soft_config.output.name.mkdir(parents=True, exist_ok=True)
-    # print(f"Using device: {soft_config.device}")
+    with soft_config.unfreeze():
+        soft_config.device = device  # reflect those changes in the Config object
+        if soft_config.fuzzy.t_norm.yager.lower() == "euler":
+            w_parameter = np.e
+        elif soft_config.fuzzy.t_norm.yager.lower() == "golden":
+            w_parameter = (1 + 5**0.5) / 2
+        else:
+            w_parameter = float(soft_config.fuzzy.t_norm.yager)
+        soft_config.fuzzy.t_norm.yager = w_parameter
+        soft_config.fuzzy.rough.compatibility = False
+        soft_config.output.name = (
+            path_to_project_root()
+            / "figures"
+            / "CEW"
+            / d3rlpy_alg.__name__
+            / problem_id
+        )
+        soft_config.clustering.distance_threshold = 0.17
+        soft_config.training.epochs = 300
+        soft_config.training.learning_rate = 3e-4
+        soft_config.fuzzy.t_norm.yager = np.e
+        soft_config.fuzzy.partition.adjustment = 0.2
+        soft_config.fuzzy.partition.epsilon = 0.7
 
     train_transitions = torch.Tensor(
         np.array(
@@ -165,12 +181,26 @@ def train_d3rlpy_policy(
             ]
         )  # outer loop is first, then inner loop
     )
-    # test_transitions = np.array(
-    #     [transition for episode in test_episodes for transition in episode.observations]
-    # )  # outer loop is first, then inner loop
-    # min_values = train_transitions.min(axis=0)
-    # max_values = train_transitions.max(axis=0)
+    test_transitions = np.array(
+        [transition for episode in test_episodes for transition in episode.observations]
+    )  # outer loop is first, then inner loop
+    # FLC from self-organizing
+    self_organize = SystematicDesignProcess(
+        # algorithms=["clip", "no_rules"], config=soft_config
+        algorithms=["expert_partition", "no_rules"],
+        config=soft_config,
+    ).build(
+        training_data=SupervisedDataset(inputs=train_transitions, targets=None),
+        validation_data=SupervisedDataset(inputs=test_transitions, targets=None),
+    )
+    # knowledge_base = self_organize.start()
+    # min_values, _ = train_transitions.min(axis=0)
+    # max_values, _ = train_transitions.max(axis=0)
     # mask = min_values != max_values
+
+    # print(f"{problem_id}: {np.array(config.data.features.step)[min_values == max_values]}")
+    # return
+
     # train_transitions = torch.tensor(train_transitions[:, mask])
     # test_transitions = torch.tensor(test_transitions[:, mask])
     # self_organize = soft.computing.blueprints.clip_ecm_wm(
@@ -200,11 +230,11 @@ def train_d3rlpy_policy(
     #     f"Average (std. dev.) premises is "
     #     f"{np.mean(premises)} ({np.std(premises)})"
     # )
-    # if problem_id == "problem":
-    #     n_action = len(config.training.actions.problem)
-    # else:
-    #     n_action = len(config.training.actions.step)
-    #
+    if problem_id == "problem":
+        n_action = len(config.training.actions.problem)
+    else:
+        n_action = len(config.training.actions.step)
+
     # with soft_config.unfreeze():
     #     soft_config.device = torch.device(
     #         f"cuda:{torch.cuda.current_device()}" if torch.cuda.is_available() else "cpu"
@@ -213,9 +243,12 @@ def train_d3rlpy_policy(
     #
     # knowledge_base.config = soft_config
 
-    # encoder_factory = SoftEncoderFactory(
-    #     knowledge_base=knowledge_base, feature_size=n_state, action_size=n_action
-    # )
+    encoder_factory = SoftEncoderFactory(
+        knowledge_base=knowledge_base, feature_size=n_state, action_size=n_action
+    )
+
+    # if problem_id in ["problem", "exc137(w)", "ex132a(w)"]:
+    #     return
 
     print(
         f"{Fore.YELLOW}"
@@ -223,11 +256,15 @@ def train_d3rlpy_policy(
         f"{Style.RESET_ALL}"
     )
     algorithm = d3rlpy_alg(
-        # encoder_factory=encoder_factory,
+        # remove encoder_factory=encoder_factory, to use the default encoder
+        encoder_factory=encoder_factory,
+        # remove q_func_factory=CustomMeanQFunctionFactory(share_encoder=True), to use the default Q-function
+        q_func_factory=CustomMeanQFunctionFactory(share_encoder=True),
+        # keep the following parameters as-is (or change them if you want to experiment)
         use_gpu=torch.cuda.is_available(),
         learning_rate=3e-4,
         batch_size=16,
-        # alpha=0.1
+        alpha=0.1,
     )
 
     def make_terminals(episodes: List[Episode]) -> List[int]:
@@ -257,11 +294,14 @@ def train_d3rlpy_policy(
         / problem_id
     )
     path_to_logs.mkdir(parents=True, exist_ok=True)
+    # modify the algorithm instance to override the handling of the optimizer for NAS
+    algorithm = modify_algorithm(algorithm, n_state, n_action)
 
     algorithm.fit(
         train_episodes,
         eval_episodes=test_episodes,
-        n_epochs=1,
+        save_interval=100,  # save the model every 500 epochs
+        n_epochs=5,
         logdir=str(path_to_logs),
         scorers={
             "td_error": td_error_scorer,
@@ -364,8 +404,13 @@ def train_d3rlpy_policy(
                     f"{Style.RESET_ALL}"
                 )
             else:
-                # no need for the pysoft subdirectory - delete the directory if it exists
-                output_directory.rmdir()
+                # no need for the pysoft subdirectory - delete the directory if it exists & is empty
+                if (
+                    output_directory.exists()
+                    and output_directory.is_dir()
+                    and not any(output_directory.iterdir())
+                ):
+                    output_directory.rmdir()
         else:
             # save greedy-policy as ONNX
             if torch.cuda.is_available():
@@ -373,13 +418,13 @@ def train_d3rlpy_policy(
             # algorithm.save_policy(
             #     str(output_directory / f"{problem_id}.onnx")
             # )  # this command should have worked, but it did not, so we use the following
-            model = algorithm._impl._q_func.q_funcs[0]
+            model = algorithm._impl._q_func.q_funcs[
+                0
+            ].cpu()  # do not use CUDA when exporting, it can cause issues
             model.eval()  # torch.nn.Parameters cannot & should not be traced in training mode
             torch.onnx.export(
                 model,  # the trained Q-function is in the 0'th index
-                torch.randn(1, n_state).cuda()
-                if torch.cuda.is_available()
-                else torch.randn(1, n_state),
+                torch.randn(1, n_state),
                 output_directory / f"{problem_id}.onnx",
                 opset_version=11,
                 input_names=["x"],
