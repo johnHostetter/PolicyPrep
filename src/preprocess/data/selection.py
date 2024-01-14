@@ -231,7 +231,7 @@ def move_and_convert_data(file: Path, problem_id: str, config: Config) -> None:
 
             print(
                 f"{Fore.GREEN}"
-                f"Successfully converted the data frame to an MDP dataset. "
+                f"Successfully converted the data frame to an MDP dataset {mdp_dataset.observations.shape}. "
                 f"Saved to {output_directory / 'd3rlpy' / f'{problem_id}.h5'}."
                 f"{Style.RESET_ALL}"
             )

@@ -8,7 +8,9 @@ InferNet code.
 import sys
 import warnings
 from pathlib import Path
-from alive_progress import alive_bar
+from timeit import timeit
+
+from alive_progress import alive_bar, alive_it
 from typing import Tuple, Union, List, Callable
 
 import numpy as np
@@ -100,41 +102,39 @@ def iterate_over_semester_data(
     semester_folder_path_generator: List[Path] = list(
         (path_to_project_root() / "data" / subdirectory).glob("* - *")
     )
-    with alive_bar(len(list(semester_folder_path_generator))) as bar:
-        for semester_folder in semester_folder_path_generator:
-            if not semester_folder.is_dir():
-                print(
-                    f"{Fore.RED}"
-                    f"Skipping {semester_folder.name} (not a directory)..."
-                    f"{Style.RESET_ALL}"
-                )
-                continue
-            if " - " not in semester_folder.name:
-                print(
-                    f"{Fore.RED}"
-                    f"Skipping {semester_folder.name} (invalid directory name)..."
-                    f"{Style.RESET_ALL}"
-                )
-                continue
-
-            # the name of the semester is the part of the folder name after the " - "
-            # e.g. "10 - S21" -> "S21"; the part before the " - " is the folder ordering number
-            (_, semester_name) = semester_folder.name.split(" - ")
+    for semester_folder in semester_folder_path_generator:
+        if not semester_folder.is_dir():
             print(
-                f"{Fore.YELLOW}"
-                f"Processing data for the {semester_name} semester..."
+                f"{Fore.RED}"
+                f"Skipping {semester_folder.name} (not a directory)..."
                 f"{Style.RESET_ALL}"
             )
+            continue
+        if " - " not in semester_folder.name:
+            print(
+                f"{Fore.RED}"
+                f"Skipping {semester_folder.name} (invalid directory name)..."
+                f"{Style.RESET_ALL}"
+            )
+            continue
 
-            try:
-                function_to_perform(semester_folder, semester_name, config)
-            except FileNotFoundError as file_not_found_error:
-                warnings.warn(
-                    f"Skipping {semester_folder.name} (no {file_not_found_error.filename} file "
-                    f"found for this semester)..."
-                )
-                continue
-            bar()
+        # the name of the semester is the part of the folder name after the " - "
+        # e.g. "10 - S21" -> "S21"; the part before the " - " is the folder ordering number
+        (_, semester_name) = semester_folder.name.split(" - ")
+        print(
+            f"{Fore.YELLOW}"
+            f"Processing data for the {semester_name} semester..."
+            f"{Style.RESET_ALL}"
+        )
+
+        try:
+            function_to_perform(semester_folder, semester_name, config)
+        except FileNotFoundError as file_not_found_error:
+            warnings.warn(
+                f"Skipping {semester_folder.name} (no {file_not_found_error.filename} file "
+                f"found for this semester)..."
+            )
+            continue
 
 
 def convert_data_format(
@@ -379,7 +379,7 @@ def convert_problem_level_format(
     users_with_nan_nlg: List[int] = []
     action_col_location = prob_lvl_feature_df.columns.get_loc("action")
     reward_col_location = prob_lvl_feature_df.columns.get_loc("reward")
-    for i in range(len(prob_lvl_feature_df)):
+    for i in alive_it(range(len(prob_lvl_feature_df)), title=f"{semester_name}"):
         user_id = prob_lvl_feature_df.iloc[i]["userID"]
         decision_point = prob_lvl_feature_df.iloc[i]["decisionPoint"]
         if decision_point == "probStart":
@@ -419,12 +419,13 @@ def convert_problem_level_format(
     ]
 
     # save the problem-level training data
+    prob_lvl_feature_df.to_csv(output_directory / "problem.csv", index=False)
     print(
         f"{Fore.GREEN}"
-        f"{semester_name}: Saving problem-level training data..."
+        f"{semester_name}: Saved problem-level training data to "
+        f"{output_directory  / 'problem.csv'}."
         f"{Style.RESET_ALL}"
     )
-    prob_lvl_feature_df.to_csv(output_directory / "problem.csv", index=False)
 
 
 def convert_step_level_format(
@@ -450,7 +451,7 @@ def convert_step_level_format(
     """
     # get the problems for the semester
     problems: List[str] = get_problems(substep_info_df)
-    for problem in problems:
+    for problem in alive_it(problems, title=f"{semester_name}"):
         step_lvl_feature_df = step_features_df[
             (step_features_df["decisionPoint"].isin(["stepStart", "probEnd"]))
             & (step_features_df["problem"].isin([problem, problem + "w"]))
@@ -497,7 +498,8 @@ def convert_step_level_format(
             new_step_lvl_feature_df: List[pd.DataFrame] = []
             print(  # this is not a warnings.warn message since this may be resolved
                 f"{Fore.RED}"
-                f"{semester_name}: The step-level feature and sub-step data size mismatch for {problem}."
+                f"{semester_name}: The step-level feature and sub-step data "
+                f"size mismatch for {problem}."
                 f"{Style.RESET_ALL}"
             )
             # attempt to resolve the conflict/discrepancies
@@ -540,15 +542,17 @@ def convert_step_level_format(
                     # if it is, keep it
                     new_step_lvl_substep_df.append(tmp_user_step_lvl_substep_df)
                     new_step_lvl_feature_df.append(tmp_user_step_lvl_feature_df)
-                    print(
-                        f"{Fore.GREEN}"
-                        f"{semester_name}: Resolved data size mismatch for user {user_id}."
-                        f"{Style.RESET_ALL}"
-                    )
+                    # print(
+                    #     f"{Fore.GREEN}"
+                    #     f"{semester_name}: Resolved data size mismatch for user {user_id}."
+                    #     f"{Style.RESET_ALL}"
+                    # )
                 else:  # otherwise, we can't seem to use this user's data - something bad happened
                     # the current user has insufficient data logged (e.g., S23 user 231228)
-                    warnings.warn(
+                    print(
+                        f"{Fore.RED}"
                         f"{semester_name}: Skipping user {user_id} as they have invalid data."
+                        f"{Style.RESET_ALL}"
                     )  # NOTE: this isn't a common occurrence, between S23 & F23, this happened ONCE
 
             # override the variables
@@ -571,7 +575,8 @@ def convert_step_level_format(
             else:
                 print(
                     f"{Fore.GREEN}"
-                    f"{semester_name}: Mismatch and conflicts resolved between feature and sub-step information."
+                    f"{semester_name}: Mismatch and conflicts resolved between "
+                    f"feature and sub-step information."
                     f"{Style.RESET_ALL}"
                 )
 
@@ -584,12 +589,11 @@ def convert_step_level_format(
             user_id_substep = step_lvl_substep_df.iloc[sub_step_counter]["userID"]
 
             if user_id_feature != user_id_substep:
-                warnings.warn(
-                    "UserID mismatch between feature_all and substep_info at step-level: "
-                    "Feature -> "
-                    + str(user_id_feature)
-                    + ", subStep -> "
-                    + str(user_id_substep)
+                print(
+                    f"{Fore.RED}"
+                    f"UserID mismatch between feature_all and substep_info at step-level: "
+                    f"Feature -> {user_id_feature} and Substep -> {user_id_substep}"
+                    f"{Style.RESET_ALL}"
                 )
                 continue
 
@@ -599,12 +603,13 @@ def convert_step_level_format(
             sub_step_counter += 1
 
         # save the step-level training data for this current problem
+        step_lvl_feature_df.to_csv(output_directory / f"{problem}(w).csv", index=False)
         print(
             f"{Fore.GREEN}"
-            f"{semester_name}: Saving {problem} step-level training data..."
+            f"{semester_name}: Saved {problem} step-level training data to "
+            f"{output_directory / f'{problem}(w).csv'}..."
             f"{Style.RESET_ALL}"
         )
-        step_lvl_feature_df.to_csv(output_directory / f"{problem}(w).csv", index=False)
 
 
 if __name__ == "__main__":
