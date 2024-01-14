@@ -126,7 +126,9 @@ def calculate_d3rlpy_algo_q_values(config: Config = None) -> None:
                     q_values = np.squeeze(np.array(q_values), axis=1)
                     assert q_values.shape[-1] == len(possible_actions)  # sanity check
 
-                    print(f"Action Distribution: {np.unique(q_values.argmax(axis=-1), return_counts=True)}")
+                    print(
+                        f"Action Distribution: {np.unique(q_values.argmax(axis=-1), return_counts=True)}"
+                    )
 
                     # TODO: check that the Q-values are correct for each action
                     q_values_df = pd.DataFrame(
