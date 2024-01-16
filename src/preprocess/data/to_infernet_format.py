@@ -417,7 +417,6 @@ def convert_problem_level_format(
     prob_lvl_feature_df = prob_lvl_feature_df[
         ~prob_lvl_feature_df["userID"].isin(users_with_nan_nlg)
     ]
-
     # save the problem-level training data
     prob_lvl_feature_df.to_csv(output_directory / "problem.csv", index=False)
     print(
