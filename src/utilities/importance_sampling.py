@@ -40,7 +40,7 @@ class ImportanceSampling(object):
             expert_count = 0
             for i in range(0, len(row_index)):
                 action = user_data.loc[row_index[i], "real_action"]
-                reward = user_data.loc[row_index[i], "inferred_reward"]
+                reward = user_data.loc[row_index[i], "reward"]
                 Qs = user_data.loc[row_index[i], Q_list].tolist()
 
                 user_sequence.append((action, reward, Qs))
@@ -57,8 +57,8 @@ class ImportanceSampling(object):
 
             for i, (action, reward, Qs) in enumerate(each_student_data):
                 Q_act = Qs[action]
-                prob_logP = math.exp(Q_act * self.theta) / sum(
-                    math.exp(x * self.theta) for x in Qs
+                prob_logP = math.exp(Q_act * self.theta) / (
+                    sum(math.exp(x * self.theta) for x in Qs) + 1e-32
                 )
 
                 cumul_policy_prob *= prob_logP
@@ -85,8 +85,8 @@ class ImportanceSampling(object):
 
             for i, (action, reward, Qs) in enumerate(each_student_data):
                 Q_act = Qs[action]
-                prob_logP = math.exp(Q_act * self.theta) / sum(
-                    math.exp(x * self.theta) for x in Qs
+                prob_logP = math.exp(Q_act * self.theta) / (
+                    sum(math.exp(x * self.theta) for x in Qs) + 1e-32
                 )
 
                 cumul_policy_prob *= prob_logP
@@ -100,7 +100,7 @@ class ImportanceSampling(object):
 
             WIS += IS_reward
 
-        WIS = float(WIS) / total_weight
+        WIS = float(WIS) / (total_weight + 1e-32)
         return WIS
 
     def PDIS(self):
@@ -113,8 +113,8 @@ class ImportanceSampling(object):
 
             for i, (action, reward, Qs) in enumerate(each_student_data):
                 Q_act = Qs[action]
-                prob_logP = math.exp(Q_act * self.theta) / sum(
-                    math.exp(x * self.theta) for x in Qs
+                prob_logP = math.exp(Q_act * self.theta) / (
+                    sum(math.exp(x * self.theta) for x in Qs) + 1e-32
                 )
 
                 cumul_policy_prob *= prob_logP
@@ -179,8 +179,8 @@ class ImportanceSampling(object):
 
             for i, (action, reward, Qs) in enumerate(each_student_data):
                 Q_act = Qs[action]
-                prob_logP = math.exp(Q_act * self.theta) / sum(
-                    math.exp(x * self.theta) for x in Qs
+                prob_logP = math.exp(Q_act * self.theta) / (
+                    sum(math.exp(x * self.theta) for x in Qs) + 1e-32
                 )
 
                 cumul_policy_prob *= prob_logP
@@ -195,7 +195,8 @@ class ImportanceSampling(object):
             PHWIS_beh[tau] += IS_reward
 
         PHWIS_beh = {
-            tau: float(PHWIS_beh[tau]) / total_weight[tau] for tau in PHWIS_beh
+            tau: float(PHWIS_beh[tau]) / (total_weight[tau] + 1e-32)
+            for tau in PHWIS_beh
         }
         PHWIS_beh_total = sum(
             (len_traj[tau] / count_traj) * PHWIS_beh[tau] for tau in PHWIS_beh
@@ -214,8 +215,8 @@ class ImportanceSampling(object):
             for i, (action, reward, Qs) in enumerate(each_student_data):
                 Q_act = Qs[action]
                 V = max(Qs)
-                prob_logP = math.exp(Q_act * self.theta) / sum(
-                    math.exp(x * self.theta) for x in Qs
+                prob_logP = math.exp(Q_act * self.theta) / (
+                    sum(math.exp(x * self.theta) for x in Qs) + 1e-32
                 )
 
                 cumul_policy_prob *= prob_logP
@@ -245,8 +246,8 @@ class ImportanceSampling(object):
             for i, (action, reward, Qs) in enumerate(each_student_data):
                 Q_act = Qs[action]
                 V = max(Qs)
-                prob_logP = math.exp(Q_act * self.theta) / sum(
-                    math.exp(x * self.theta) for x in Qs
+                prob_logP = math.exp(Q_act * self.theta) / (
+                    sum(math.exp(x * self.theta) for x in Qs) + 1e-32
                 )
 
                 cumul_policy_prob *= prob_logP
@@ -264,4 +265,4 @@ class ImportanceSampling(object):
 
             DR += DR_each_student
 
-        return float(DR) / total_weight
+        return float(DR) / (total_weight + 1e-32)

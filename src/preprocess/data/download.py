@@ -5,7 +5,7 @@ steps in the pipeline can simply load the data from the downloaded folder.
 """
 import gdown
 
-from src.utils.reproducibility import path_to_project_root, load_configuration
+from src.utilities.reproducibility import path_to_project_root, load_configuration
 
 
 def download_semester_data():
@@ -22,6 +22,8 @@ def download_semester_data():
     gdown.download_folder(
         url=config.data.folder.name,
         output=str(path_to_project_root() / "data" / "raw"),
+        remaining_ok=True,
+        quiet=False,
     )
 
 

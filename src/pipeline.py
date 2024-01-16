@@ -171,13 +171,19 @@ How to run a single step of the pipeline for a specific exercise:
 
         python -m src/preprocess/infernet/train --problem_id problem
 """
-import argparse
-import multiprocessing as mp
+import shutil
+from pathlib import Path
+
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 
 from src.policy.inference.with_d3rlpy_dqn import calculate_d3rlpy_algo_q_values
 from src.policy.evaluation.offline.off_policy import evaluate_all_policies
 from src.policy.induction.d3rlpy.dqn import induce_policies_with_d3rlpy
 from src.preprocess.data.lookup import lookup_semester_grades_and_append_if_missing
+from src.preprocess.data.make_consistent import append_year_and_semester_to_user_id
 from src.preprocess.infernet.train import (
     train_infer_net,
     train_step_level_models,
@@ -192,104 +198,18 @@ from src.preprocess.data.to_infernet_format import (
 from src.preprocess.infernet.problem_to_step import (
     propagate_problem_level_rewards_to_step_level,
 )
-from src.utils.reproducibility import (
+from src.utilities.reproducibility import (
+    parse_keyword_arguments,
     load_configuration,
+    path_to_project_root,
 )  # order matters, must be imported last
 
 
-def parse_keyword_args() -> argparse.Namespace:
-    """
-    Parse the keyword arguments passed to the script.
-
-    Returns:
-        The keyword arguments passed to the script.
-    """
-    parser = argparse.ArgumentParser(
-        description="Run the pipeline for the project. The pipeline is as follows: "
-        "(1) Load the configuration file. "
-        "(2) Download the semester data from the Google Drive folder. "
-        "(3) Preprocess the data to make it compatible with InferNet. "
-        "(4) Aggregate the data into a single file; for example, one file for problem-level data "
-        "and one file for each exercises' step-level data. "
-        "(5) Train the InferNet model for the problem-level. "
-        "(6) Propagate the problem-level rewards to the step-level. "
-        "(7) Train the InferNet model for each exercise (step-level) data file that was created in "
-        "step (4) above (except for the problem-level data file) using the InferNet model trained "
-        "in step (5) above to infer the immediate rewards for each exercise (step-level). "
-        "(8) Select the most recent data file (with inferred immediate rewards) "
-        "produced as a result "
-        "of training InferNet, and store it in the data subdirectory called "
-        '"for_policy_induction". '
-        "(9) Train the policy induction model using the data files selected in step (8) above.",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    parser.add_argument(
-        "--step",
-        type=int,
-        default=1,
-        help="The step of the pipeline to run. "
-        "1: download the semester data from the Google Drive folder. "
-        "2: preprocess the data to make it compatible with InferNet. "
-        "3: aggregate the data into a single file; for example, one file for problem-level data "
-        "and one file for each exercises' step-level data. "
-        "4: train the InferNet model for the problem-level. "
-        "5: propagate the problem-level rewards to the step-level. "
-        "6: train the InferNet model for each exercise (step-level) data file that was created in "
-        "step (4) above (except for the problem-level data file) using the InferNet model trained "
-        "in step (5) above to infer the immediate rewards for each exercise (step-level). "
-        "7: select the most recent data file (with inferred immediate rewards) "
-        "produced as a result "
-        "of training InferNet, and store it in the data subdirectory called "
-        '"for_policy_induction". '
-        "8: train the policy induction model using the data files selected in step (7) above.",
-    )
-    parser.add_argument(
-        "--run_specific",
-        default=False,
-        action="store_true",
-        help="If False, continue with steps after the step that is specified "
-        "by the --step argument. "
-        "If True, do not continue with steps after the step that is specified "
-        "by the --step argument.",
-    )
-    parser.add_argument(
-        "--problem_id",
-        type=str,
-        default="problem",
-        help="The problem ID for which to run the pipeline. "
-        "If the step is 1, 2, 3, 4, 5, or 7, this argument is ignored. "
-        "If the step is 6, this argument is required. "
-        "If the step is 8, this argument is optional. "
-        "If the step is 9, this argument is required.",
-    )
-    parser.add_argument(
-        "--num_workers",
-        type=int,
-        default=mp.cpu_count() - 1,
-        help="The number of workers (i.e., processes) to use for multiprocessing. "
-        "If the step is 1, 2, 3, 4, 5, or 7, this argument is ignored. "
-        "If the step is 6, this argument is optional. "
-        "If the step is 8, this argument is optional. "
-        "If the step is 9, this argument is required.",  # TODO: make this optional?
-    )
-
-    parser.add_argument(
-        "--config_file_path",
-        type=str,
-        default="default_configuration.yaml",
-        help="The path to the configuration file.",
-    )
-
-    arguments = parser.parse_args()
-    arguments.num_workers = min(arguments.num_workers, mp.cpu_count() - 1)
-
-    return arguments
-
-
 if __name__ == "__main__":
-    # parse the command line arguments
-    args = parse_keyword_args()
+    colorama_init()  # initialize colorama for cross-platform colored text in the terminal
 
+    # parse the command line arguments
+    args = parse_keyword_arguments()
     print(args)
 
     # load the configuration file
@@ -300,77 +220,150 @@ if __name__ == "__main__":
     # download the data from the Google Drive folder into a subdirectory of the
     # data folder called "raw"
     if args.step == 1:
-        print("(1): Downloading the semester data from the Google Drive folder...")
+        print(
+            f"{Fore.CYAN}"
+            f"(1): Downloading the semester data from the Google Drive folder..."
+            f"{Style.RESET_ALL}"
+        )
         download_semester_data()
 
-    # find the semester data files and lookup the grades for each student and
-    # append them to the data files if they are missing
+    # begin by moving all the files from the raw directory to the clean directory
+    # (some files may be overwritten later, but this is okay and easier)
     if args.step == 2 or (not args.run_specific and args.step <= 2):
         print(
-            "(2): Looking up the grades for each student and appending them to the "
-            "data files if they are missing..."
+            f"{Fore.CYAN}"
+            f"(2): Copying all the files from the raw directory to the clean directory..."
+            f"{Style.RESET_ALL}"
+        )
+        path_to_raw_directory: Path = path_to_project_root() / "data" / "raw"
+        path_to_clean_directory: Path = path_to_project_root() / "data" / "clean"
+        # delete the clean directory if it exists
+        shutil.rmtree(path_to_clean_directory, ignore_errors=True)
+        # copy the raw directory to the clean directory (this will overwrite any files that
+        # already exist in the clean directory)
+        shutil.copytree(path_to_raw_directory, path_to_clean_directory)
+
+    # add the year and semester to the user IDs if they are not already there
+    if args.step == 3 or (not args.run_specific and args.step <= 3):
+        print(
+            f"{Fore.CYAN}"
+            f"(3): Adding the year and semester to the user IDs if they are not already there..."
+            f"{Style.RESET_ALL}"
         )
         iterate_over_semester_data(
             subdirectory="raw",
-            config_file=config,
-            function_to_perform=lookup_semester_grades_and_append_if_missing,
+            function_to_perform=append_year_and_semester_to_user_id,
+            config=config,
         )
 
-    # preprocess the data to make it compatible with InferNet
-    if args.step == 3 or (not args.run_specific and args.step <= 3):
-        print("(3): Preprocessing the data to make it compatible with InferNet...")
+    # find the semester data files and lookup the grades for each student and
+    # append them to the data files if they are missing (this modifies files in data/raw)
+    if args.step == 4 or (not args.run_specific and args.step <= 4):
+        print(
+            f"{Fore.CYAN}"
+            "(4): Looking up the grades for each student and appending them to the "
+            "data files if they are missing..."
+            f"{Style.RESET_ALL}"
+        )
         iterate_over_semester_data(
-            subdirectory="raw",
-            config_file=config,
-            function_to_perform=convert_data_format,
+            subdirectory="clean",
+            function_to_perform=lookup_semester_grades_and_append_if_missing,
+            config=config,
+        )
+
+    # # clean the data by removing the offset used for wording problems and removing
+    # # any users that have NaN grades, as well as adding the year and semester to the
+    # # user IDs if they are not already there
+    # if args.step == 4 or (not args.run_specific and args.step <= 4):
+    #     print(
+    #         "(3): Cleaning the data by removing the offset used for wording problems and "
+    #         "removing any users that have NaN grades..."
+    #     )
+    #     iterate_over_semester_data(
+    #         subdirectory="raw", function_to_perform=clean_semester_data, config=config
+    #     )
+
+    # preprocess the data to make it compatible with InferNet
+    if args.step == 5 or (not args.run_specific and args.step <= 5):
+        print(
+            f"{Fore.CYAN}"
+            "(5): Preprocessing the data to make it compatible with InferNet..."
+            f"{Style.RESET_ALL}"
+        )
+        iterate_over_semester_data(
+            subdirectory="clean", function_to_perform=convert_data_format, config=config
         )
 
     # aggregate the data into a single file
-    if args.step == 4 or (not args.run_specific and args.step <= 4):
-        print("(4): Aggregating the data into a single file...")
+    if args.step == 6 or (not args.run_specific and args.step <= 6):
+        print(
+            f"{Fore.CYAN}"
+            "(6): Aggregating the data into a single file..."
+            f"{Style.RESET_ALL}"
+        )
         aggregate_data_for_inferring_rewards()
 
     # train the InferNet model for the problem level data
-    if args.step == 5 or (not args.run_specific and args.step <= 5):
-        print("(5): Training the InferNet model for the problem level data...")
+    if args.step == 7 or (not args.run_specific and args.step <= 7):
+        print(
+            f"{Fore.CYAN}"
+            "(7): Training the InferNet model for the problem level data..."
+            f"{Style.RESET_ALL}"
+        )
         train_infer_net(problem_id="problem")
 
     # propagate problem-level rewards to step-level rewards
-    if args.step == 6 or (not args.run_specific and args.step <= 6):
-        print("(6): Propagating problem-level rewards to step-level rewards...")
+    if args.step == 8 or (not args.run_specific and args.step <= 8):
+        print(
+            f"{Fore.CYAN}"
+            "(8): Propagating problem-level rewards to step-level rewards..."
+            f"{Style.RESET_ALL}"
+        )
         propagate_problem_level_rewards_to_step_level(num_workers=args.num_workers)
 
     # train an InferNet model for each exercise
-    if args.step == 7 or (not args.run_specific and args.step <= 7):
+    if args.step == 9 or (not args.run_specific and args.step <= 9):
         print(
-            "(7): Training the InferNet model for each exercise (step-level) data file..."
+            f"{Fore.CYAN}"
+            "(9): Training the InferNet model for each exercise (step-level) data file..."
+            f"{Style.RESET_ALL}"
         )
 
         train_step_level_models(args, config)
 
     # select the training data to be used for policy induction via offline reinforcement learning
-    if args.step == 8 or (not args.run_specific and args.step <= 8):
+    if args.step == 10 or (not args.run_specific and args.step <= 10):
         print(
-            "(8) Selecting the training data to be used for policy induction "
+            f"{Fore.CYAN}"
+            "(10) Selecting the training data to be used for policy induction "
             "via offline reinforcement learning..."
+            f"{Style.RESET_ALL}"
         )
         select_training_data_for_policy_induction(num_workers=args.num_workers)
 
     # induce policies via selected offline reinforcement learning algorithms & training data
-    if args.step == 9 or (not args.run_specific and args.step <= 9):
+    if args.step == 11 or (not args.run_specific and args.step <= 11):
         print(
-            "(9) Training the policy induction model using the selected training data..."
+            f"{Fore.CYAN}"
+            "(11) Training the policy induction model using the selected training data..."
+            f"{Style.RESET_ALL}"
         )
         induce_policies_with_d3rlpy()
 
         # calculate the Q-values for the induced policies
-    if args.step == 10 or (not args.run_specific and args.step <= 10):
-        print("(10) Calculating the Q-values for the induced policies...")
+    if args.step == 12 or (not args.run_specific and args.step <= 12):
+        print(
+            f"{Fore.CYAN}"
+            "(12) Calculating the Q-values for the induced policies..."
+            f"{Style.RESET_ALL}"
+        )
         calculate_d3rlpy_algo_q_values()
 
         # evaluate the induced policies using their respective calculated Q-values
-    if args.step == 11 or (not args.run_specific and args.step <= 11):
+    if args.step == 13 or (not args.run_specific and args.step <= 13):
         print(
-            "(11) Evaluating the policy induction model using the selected training data..."
+            f"{Fore.CYAN}"
+            "(13) Evaluating the policy induction model using the selected training data..."
+            f"{Style.RESET_ALL}"
         )
         evaluate_all_policies()

@@ -1,16 +1,25 @@
 """
 This file is used to train the InferNet model for the problem level data.
 """
-import os
-import time
-import random
 import argparse
+import pickle
 import multiprocessing as mp
 from typing import Tuple, List
 
+from colorama import (
+    init as colorama_init,
+)  # for cross-platform colored text in the terminal
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
+
+import torch
 import numpy as np
 import pandas as pd
-import tensorflow as tf
+from d3rlpy.dataset import MDPDataset
+from skorch.callbacks import EarlyStopping
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.feature_selection import SelectKBest
+from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.preprocessing import Normalizer, MinMaxScaler
 
 from YACS.yacs import Config
 from src.preprocess.data.parser import data_frame_to_d3rlpy_dataset
@@ -19,22 +28,17 @@ from src.preprocess.infernet.common import (
     read_data,
     build_model,
     calc_max_episode_length,
-    normalize_data,
-    create_buffer,
-    infer_and_save_rewards,
 )
-from src.utils.reproducibility import (
+from src.preprocess.infernet.sklearn import Flatten, Reshape
+from src.preprocess.infernet.skorch import InferNet
+from src.utilities.reproducibility import (
     load_configuration,
     set_random_seed,
     path_to_project_root,
 )
 
-# Automatic Mixed Precision: speeds up AI models ~ 3 times & helps w/ memory
-tf.keras.mixed_precision.set_global_policy("mixed_float16")
-# reduce the priority of TensorFlow for CPU usage to free up resources
-os.nice(10)
-# prevent TensorFlow from allocating too much memory at once
-os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+pd.options.mode.chained_assignment = None  # default='warn'
+colorama_init(autoreset=True)  # initialize colorama
 
 
 def train_infer_net(problem_id: str) -> None:
@@ -48,134 +52,246 @@ def train_infer_net(problem_id: str) -> None:
     Returns:
         None
     """
-    # see if a GPU is available
-    physical_devices = tf.config.list_physical_devices("GPU")
-    if len(physical_devices) > 0:
-        # configure tensorflow to use the GPU
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-        # set the memory growth to true
-        tf.config.experimental.set_memory_growth(physical_devices[0], True)
-
-        # print the device name
-        print(f"Running on {physical_devices[0]}")
-    else:
-        # configure tensorflow to use the CPU
-        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-    # disable the TensorFlow output messages
-    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
     # load the configuration file
     config = load_configuration()
     # set the random seed
     set_random_seed(seed=config.training.seed)
-    is_problem_level, max_len, original_data, user_ids = infernet_setup(problem_id)
+    is_problem_level, mdp_dataset, original_data = infernet_setup(problem_id)
+    max_len = calc_max_episode_length(mdp_dataset)
 
     # select the features and actions depending on if the data is problem-level or step-level
     state_features, possible_actions = get_features_and_actions(
         config, is_problem_level
     )
 
-    # normalize the data
-    normalized_data = normalize_data(
-        original_data, problem_id, columns_to_normalize=state_features
-    )
-    # create the buffer to train InferNet from
-    infer_buffer = create_buffer(
-        normalized_data,
-        user_ids,
-        config,
-        is_problem_level=is_problem_level,
-        max_len=max_len,  # max_len is the max episode length; not required for problem-level data
+    print(
+        f"{Fore.YELLOW}"
+        f"ID: {problem_id} | The maximum length of an episode is {max_len}."
+        f"{Style.RESET_ALL}"
     )
 
-    num_state_and_actions = len(state_features) + len(possible_actions)
-    print(f"{problem_id}: Max episode length is {max_len}")
+    NUM_OF_SELECTED_FEATURES = 30
+    model = build_model(
+        NUM_OF_SELECTED_FEATURES + len(possible_actions) + 1  # + 1 for no-op action
+    )
 
-    model = build_model(max_len, len(state_features) + len(possible_actions))
+    # create the skorch wrapper
+    nn_reg = InferNet(
+        model,
+        criterion=torch.nn.MSELoss,
+        optimizer=torch.optim.Adam,
+        lr=3e-5,
+        max_epochs=1000,
+        batch_size=64,
+        # train_split=predefined_split(val_data),
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        callbacks=[
+            EarlyStopping(patience=10, monitor="valid_loss"),
+        ],
+    )
 
-    # Train the InferNet model
-    print("#####################")
-    start_time = time.time()
-    losses = []
-    for iteration in range(config.training.data.num_iterations + 1):
-        batch = random.sample(infer_buffer, config.training.data.batch_size)
-        states_actions, _, _, imm_rew_sum, _ = list(zip(*batch))
-        states_actions = np.reshape(
-            states_actions,
-            (config.training.data.batch_size, max_len, num_state_and_actions),
+    # data preprocessing pipeline (model has to be separate due to data reshaping)
+    pipeline = Pipeline(
+        [
+            ("flatten", Flatten()),
+            (
+                "scale",
+                FeatureUnion(
+                    [
+                        ("minmax", MinMaxScaler()),
+                        ("normalize", Normalizer()),
+                        ("standardize", StandardScaler()),
+                    ]
+                ),
+            ),
+            (
+                "select",
+                SelectKBest(k=NUM_OF_SELECTED_FEATURES),
+            ),  # keep input size constant
+            (
+                "resize",
+                Reshape(
+                    shape=(
+                        len(mdp_dataset.episodes),
+                        (max_len + 1),
+                        NUM_OF_SELECTED_FEATURES,
+                    )
+                ),
+            ),
+        ]
+    )
+
+    pipeline.fit(mdp_dataset.observations, mdp_dataset.rewards)
+
+    one_hot_encoded_actions = (
+        OneHotEncoder()
+        .fit_transform(mdp_dataset.actions.reshape(-1, 1))
+        .toarray()
+        .reshape(len(mdp_dataset.episodes), (max_len + 1), -1)
+    )
+
+    # too many zeros, so we only train on the non-zero rewards
+    # indices = np.where(
+    #     mdp_dataset.rewards.reshape(len(mdp_dataset.episodes), (max_len + 1))[:, -1]
+    #     != 0.0
+    # )[0]
+    nn_reg.fit(
+        np.concatenate(
+            [
+                pipeline.transform(mdp_dataset.observations)[
+                    :, :-1, :
+                ],  # remove the last step
+                one_hot_encoded_actions[:, :-1, :],  # remove the last step
+            ],
+            axis=-1,
+        ).astype(
+            np.float32
+        ),  # [indices],
+        mdp_dataset.rewards.reshape(len(mdp_dataset.episodes), (max_len + 1))  # [
+        # indices
+        # ],  # don't remove the last step here, it contains the delayed reward
+    )
+
+    history_df = pd.DataFrame(nn_reg.history)
+    # del 'batches' column (it is ugly)
+    del history_df["batches"]
+
+    iteration = 0  # this is expected but no longer needed
+
+    # get the predictions
+    predictions = nn_reg.predict(
+        np.concatenate(
+            [
+                pipeline.transform(mdp_dataset.observations)[
+                    :, :-1, :
+                ],  # remove the last step
+                one_hot_encoded_actions[:, :-1, :],  # remove the last step
+            ],
+            axis=-1,
+        ).astype(np.float32)
+    )
+    results_df = original_data[
+        ~original_data.reward.notna()
+    ]  # remove the rows w/ delayed reward
+    if is_problem_level:
+        reshaped_predictions = predictions.reshape(-1, 1)
+    else:
+        reshaped_predictions = np.concatenate(
+            [
+                predictions[
+                    user_idx, : len(group_df), :
+                ]  # slice off predictions made on padding
+                for user_idx, (user_id, group_df) in enumerate(
+                    results_df.groupby(by="userID")
+                )
+            ],
+            axis=0,  # stack them on the row axis
         )
-        imm_rew_sum = np.reshape(imm_rew_sum, (config.training.data.batch_size, 1))
-        hist = model.fit(
-            states_actions,
-            imm_rew_sum,
-            epochs=1,
-            batch_size=config.training.data.batch_size,
-            verbose=0,
+    assert results_df.shape[0] == reshaped_predictions.shape[0]
+    results_df["reward"] = reshaped_predictions
+
+    ################################################################################################
+    # The following code is used to save data and models to disk.                                  #
+    ################################################################################################
+
+    # save the predictions
+    output_directory = path_to_project_root() / "data" / "with_inferred_rewards"
+    output_directory.mkdir(parents=True, exist_ok=True)
+    results_df.to_csv(output_directory / f"{problem_id}_{iteration}.csv", index=False)
+    print(
+        f"{Fore.GREEN}"
+        f"Saved predictions to {output_directory / f'{problem_id}_{iteration}.csv'}"
+        f"{Style.RESET_ALL}"
+    )
+
+    # make the directory to save the loss data
+    path_to_loss_data = path_to_project_root() / "data" / "infernet" / "loss"
+    path_to_loss_data.mkdir(parents=True, exist_ok=True)
+
+    # save the history (e.g., loss data)
+    history_df.to_csv(path_to_loss_data / f"{problem_id}_{iteration}.csv", index=False)
+    print(
+        f"{Fore.GREEN}"
+        f"Saved loss data to {path_to_loss_data / f'{problem_id}_{iteration}.csv'}"
+        f"{Style.RESET_ALL}"
+    )
+
+    # save the scaler as a standalone operation (to be used later if we want to reuse InferNet)
+    scaler_directory = path_to_project_root() / "models" / "infernet" / "scalers"
+    scaler_directory.mkdir(parents=True, exist_ok=True)
+    pickle.dump(
+        pipeline[1:-1], open(scaler_directory / f"{problem_id}_{iteration}.pkl", "wb")
+    )  # don't save the flatten and reshape steps (they are not needed for inference)
+    print(
+        f"{Fore.GREEN}"
+        f"Saved InferNet scaler to {scaler_directory / f'{problem_id}_{iteration}.pkl'}"
+        f"{Style.RESET_ALL}"
+    )
+
+    # save the normalizer and minmax scalar as standalone operations
+    # (to be used later in policy induction)
+    for name, transformer in pipeline["scale"].transformer_list:
+        transformer_directory = path_to_project_root() / "models" / "scalers" / name
+        transformer_directory.mkdir(parents=True, exist_ok=True)
+        pickle.dump(
+            # pipeline["scale"].named_transformers["normalize"],
+            transformer,
+            open(transformer_directory / f"{problem_id}_{iteration}.pkl", "wb"),
         )
-        loss = hist.history["loss"][0]
-        losses.append(loss)
-        if iteration > 0 and iteration % config.training.data.checkpoint == 0:
-            print(
-                f"Step {iteration}/{config.training.data.num_iterations}, loss {loss}"
-            )
-            print("Training time is", time.time() - start_time, "seconds")
-            start_time = time.time()
+        print(
+            f"{Fore.GREEN}"
+            f"Saved {name} transformer to {transformer_directory / f'{problem_id}_{iteration}.pkl'}"
+            f"{Style.RESET_ALL}"
+        )
 
-            # Infer the rewards for the data and save the data.
-            if is_problem_level:
-                state_feature_columns = config.data.features.problem
-            else:
-                state_feature_columns = config.data.features.step
+    # make the directory to save the model
+    path_to_models = path_to_project_root() / "models" / "infernet" / "torch"
+    path_to_models.mkdir(parents=True, exist_ok=True)
 
-            infer_and_save_rewards(
-                problem_id,
-                iteration,
-                infer_buffer,
-                max_len,
-                model,
-                state_feature_columns,
-                num_state_and_actions,
-                is_problem_level=is_problem_level,
-            )
+    # save the model
+    torch.save(model, path_to_models / f"{problem_id}_{iteration}.pt")
+    print(
+        f"{Fore.GREEN}"
+        f"Saved model to {path_to_models / f'{problem_id}_{iteration}.pt'}"
+        f"{Style.RESET_ALL}"
+    )
 
-            loss_df = pd.DataFrame({"loss": losses})
-            # save the loss data to generate the loss plot
-            path_to_figures = path_to_project_root() / "figures"
-            path_to_figures.mkdir(parents=True, exist_ok=True)
-            loss_df.to_csv(
-                path_to_figures / f"loss_{problem_id}_{iteration}.csv", index=False
-            )
-            # save the model
-            path_to_models = path_to_project_root() / "models" / "infernet"
-            path_to_models.mkdir(parents=True, exist_ok=True)
-            model.save(path_to_models / f"{problem_id}_{iteration}.h5")
-
-    print(f"Done training InferNet for {problem_id}.")
+    # save a checkpoint, to restore model weights and optimizer settings if training fails
+    path_to_checkpoints = path_to_project_root() / "data" / "infernet" / "checkpoints"
+    path_to_checkpoints.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {"model": model.state_dict(), "optimizer": nn_reg.optimizer_.state_dict()},
+        path_to_checkpoints / f"{problem_id}_{iteration}.pt",
+    )  # we can use a dictionary to save any arbitrary information (e.g., lr_scheduler)
+    print(
+        f"{Fore.GREEN}"
+        f"Saved checkpoint to {path_to_checkpoints / f'{problem_id}_{iteration}.pt'}"
+        f"{Style.RESET_ALL}"
+    )
 
 
-def infernet_setup(problem_id: str) -> Tuple[bool, int, pd.DataFrame, np.ndarray]:
+def infernet_setup(problem_id: str) -> Tuple[bool, MDPDataset, pd.DataFrame]:
     """
     Set up the InferNet model for the problem level data if "problem" is in problem_id. Otherwise,
     set up the InferNet model for the step level data.
 
     Args:
-        problem_id:
+        problem_id: A string that is either "problem" or the name of an exercise.
 
     Returns:
         A tuple containing the following:
             is_problem_level: A boolean indicating if the data is problem-level or step-level.
-            max_len: The maximum episode length.
-            original_data: The original data.
-            user_ids: The user IDs.
+            mdp_dataset: The MDPDataset representation, where if it is step-level, the
+            observations have been padded such that each user has the same episode length.
     """
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id
-    tf.keras.backend.set_floatx("float32")  # float64 causes memory issues
     original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
-    mdp_dataset = data_frame_to_d3rlpy_dataset(original_data, problem_id)
-    user_ids = original_data["userID"].unique()
-    max_len = calc_max_episode_length(mdp_dataset)
-    return is_problem_level, max_len, original_data, user_ids
+    # the following function will create a MDPDataset as well as further clean the data once more
+    mdp_dataset, original_data = data_frame_to_d3rlpy_dataset(
+        original_data, problem_id, padding=True  # InferNet requires padding
+    )
+    return is_problem_level, mdp_dataset, original_data
 
 
 def get_features_and_actions(
@@ -211,14 +327,23 @@ def train_step_level_models(
     Returns:
         None
     """
-    with mp.Pool(processes=args.num_workers) as pool:
-        for problem_id in config.training.problems:
-            print(f"Training the InferNet model for {problem_id}...")
-            if problem_id not in config.training.skip.problems:
-                pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
-        pool.close()
-        pool.join()
-    print("All processes finished for training step-level InferNet models.")
+    # with mp.Pool(processes=args.num_workers) as pool:
+    for problem_id in config.training.problems:
+        print(
+            f"{Fore.YELLOW}"
+            f"Training the InferNet model for {problem_id}..."
+            f"{Style.RESET_ALL}"
+        )
+        if problem_id not in config.training.skip.problems:
+            train_infer_net(f"{problem_id}(w)")
+            # pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
+        # pool.close()
+        # pool.join()
+    print(
+        f"{Fore.GREEN}"
+        "\nAll processes finished for training step-level InferNet models."
+        f"{Style.RESET_ALL}"
+    )
 
 
 if __name__ == "__main__":
