@@ -29,8 +29,8 @@ from src.preprocess.infernet.common import (
     build_model,
     calc_max_episode_length,
 )
-from src.preprocess.infernet.sklearn import Flatten, Reshape
-from src.preprocess.infernet.skorch import InferNet
+from src.preprocess.infernet.sklearn_transformers import Flatten, Reshape
+from src.preprocess.infernet.infernet import InferNet
 from src.utilities.reproducibility import (
     load_configuration,
     set_random_seed,
@@ -86,7 +86,7 @@ def train_infer_net(problem_id: str) -> None:
         # train_split=predefined_split(val_data),
         device="cuda" if torch.cuda.is_available() else "cpu",
         callbacks=[
-            EarlyStopping(patience=10, monitor="valid_loss"),
+            EarlyStopping(patience=3, monitor="valid_loss"),
         ],
     )
 
