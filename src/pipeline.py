@@ -1,30 +1,41 @@
 """
 This module implements the pipeline for the project. The pipeline is as follows:
-    (1) Load the configuration file.
-    (2) Download the semester data from the Google Drive folder.
-    (3) Preprocess the data to make it compatible with InferNet.
-    (4) Aggregate the data into a single file; for example, one file for problem-level data
+    (0) Load the configuration file.
+    (1) Download the semester data from the Google Drive folder.
+    (2) Move the downloaded data to a separate directory called "clean".
+    (3) Add the year and semester to the user IDs if they are not already there.
+    (4) Look up the grades for each student and append them to the data files if they are missing.
+    (5) Preprocess the data to make it compatible with InferNet.
+    (6) Aggregate the data into a single file; for example, one file for problem-level data
     and one file for each exercises' step-level data.
-    (5) Train the InferNet model for the problem-level.
-    (6) Propagate the problem-level rewards to the step-level.
-    (7) Train the InferNet model for each exercise (step-level) data file that was created in
-    step (4) above (except for the problem-level data file) using the InferNet model trained
-    in step (5) above to infer the immediate rewards for each exercise (step-level).
-    (8) Select the most recent data file (with inferred immediate rewards) produced as a result
+    (7) Train the InferNet model for the problem-level.
+    (8) Propagate the problem-level rewards to the step-level.
+    (9) Train the InferNet model for each exercise (step-level) data file that was created in
+    step (6) above (except for the problem-level data file) using the InferNet model trained
+    in step (7) above to infer the immediate rewards for each exercise (step-level).
+    (10) Select the most recent data file (with inferred immediate rewards) produced as a result
     of training InferNet, and store it in the data subdirectory called "for_policy_induction".
-    (9) Train the policy induction model using the data files selected in step (8) above.
+    (11) Train the policy induction model using the data files selected in step (10) above.
+    (12) Calculate the Q-values for the induced policies.
+    (13) Evaluate the induced policies using their respective calculated Q-values.
 
 This module will run the entire pipeline. During the execution of the pipeline, the data will be
-downloaded from the Google Drive folder into a subdirectory of the data folder called "raw". The
-data will then be preprocessed to make it compatible with InferNet. The data will then be
-aggregated into a single file, and saved to a subdirectory of the data folder called
-"for_inferring_rewards" or "for_propagating_rewards" depending on whether the data is
-problem-level or step-level data. The problem-level data will be used to train the InferNet model
-for the problem-level. The problem-level rewards will then be propagated to the step-level. The
-step-level data will then be used to train the InferNet model for each exercise (step-level) data
-file that was created in step (4) above (except for the problem-level data file) using the
-InferNet model trained in step (5) above to infer the immediate rewards for each exercise (
-step-level).
+downloaded from the Google Drive folder into a subdirectory of the data folder called "raw". This
+data will then be moved to a separate directory called "clean". The year and semester will be added
+to the user IDs if they are not already there. The grades for each student will be looked up and
+appended to the data files if they are missing. The data will then be preprocessed to make it
+compatible with InferNet. The data will then be aggregated into a single file, and saved to a
+subdirectory of the data folder called "for_inferring_rewards" or "for_propagating_rewards"
+depending on whether the data is problem-level or step-level data. The problem-level data will be
+used to train the InferNet model for the problem-level. The problem-level rewards will then be
+propagated to the step-level. The step-level data will then be used to train the InferNet model for
+each exercise (step-level) data file that was created in step (6) above (except for the
+problem-level data file) using the InferNet model trained in step (7) above to infer the immediate
+rewards for each exercise (step-level). During all the above steps, the data may be normalized
+and/or standardized. The data will be saved to a subdirectory of the data folder called
+"normalized" or "standardized" depending on whether the data was normalized or standardized. The
+pipeline will run in the background, and you can continue to use your computer while the pipeline
+is running. The pipeline will take a long time to complete (days or weeks).
 TODO: During all the above steps, the data may be normalized and/or standardized. The data will
 TODO: be saved to a subdirectory of the data folder called "normalized" or "standardized"
 TODO: depending on whether the data was normalized or standardized.
@@ -268,18 +279,6 @@ if __name__ == "__main__":
             function_to_perform=lookup_semester_grades_and_append_if_missing,
             config=config,
         )
-
-    # # clean the data by removing the offset used for wording problems and removing
-    # # any users that have NaN grades, as well as adding the year and semester to the
-    # # user IDs if they are not already there
-    # if args.step == 4 or (not args.run_specific and args.step <= 4):
-    #     print(
-    #         "(3): Cleaning the data by removing the offset used for wording problems and "
-    #         "removing any users that have NaN grades..."
-    #     )
-    #     iterate_over_semester_data(
-    #         subdirectory="raw", function_to_perform=clean_semester_data, config=config
-    #     )
 
     # preprocess the data to make it compatible with InferNet
     if args.step == 5 or (not args.run_specific and args.step <= 5):
