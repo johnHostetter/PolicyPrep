@@ -1,9 +1,8 @@
 """
 This file is used to train the InferNet model for the problem level data.
 """
-import argparse
 import pickle
-import multiprocessing as mp
+import argparse
 from typing import Tuple, List
 
 from colorama import (
@@ -313,21 +312,19 @@ def get_features_and_actions(
 
 
 def train_step_level_models(
-    args: argparse.Namespace, config: Config, increase_num_workers: bool = False
+    args: argparse.Namespace,
+    config: Config,
 ) -> None:
     """
     Train the InferNet models for all step-level problems.
 
     Args:
-        args: The command line arguments.
+        args: The command line arguments (unused at the moment).
         config: The configuration object.
-        increase_num_workers: A boolean indicating if the number of workers should be increased.
-        This can be enabled to speed up training, but it may cause memory issues. Defaults to False.
 
     Returns:
         None
     """
-    # with mp.Pool(processes=args.num_workers) as pool:
     for problem_id in config.training.problems:
         print(
             f"{Fore.YELLOW}"
@@ -336,9 +333,6 @@ def train_step_level_models(
         )
         if problem_id not in config.training.skip.problems:
             train_infer_net(f"{problem_id}(w)")
-            # pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
-        # pool.close()
-        # pool.join()
     print(
         f"{Fore.GREEN}"
         "\nAll processes finished for training step-level InferNet models."

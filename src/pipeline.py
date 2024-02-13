@@ -234,6 +234,8 @@ if __name__ == "__main__":
             f"(1): Downloading the semester data from the Google Drive folder..."
             f"{Style.RESET_ALL}"
         )
+        # TODO: fix this; it no longer works with last semester's (Fall 2023) data being added,
+        #  likely because raw_logs.csv is too large
         download_semester_data()
 
     # begin by moving all the files from the raw directory to the clean directory

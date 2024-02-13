@@ -42,7 +42,7 @@ def append_year_and_semester_to_user_id(
                 year_int, semester_int = make_year_and_semester_int(semester_name)
 
                 # prepare the file location for the new file (replace "raw" with "clean")
-                # either the data will have its userID column appended with the year and semester
+                # either the data will have its userID column appended with the year and semester,
                 # or it will be copied to the clean folder as-is
                 new_file_location = Path(str(csv_file).replace("raw", "clean"))
                 assert (
@@ -50,8 +50,8 @@ def append_year_and_semester_to_user_id(
                 )  # sanity check, should always exist (created in previous step)
                 new_file_location.parent.mkdir(parents=True, exist_ok=True)
 
-                # if the minimum user ID is less than the minimum user ID for the semester, then add the
-                # year_int and semester_int to the user IDs
+                # if the minimum user ID is less than the minimum user ID for the semester,
+                # then add the year_int and semester_int to the user IDs
                 if (
                     "userID" in df.columns
                     and df["userID"].min() < year_int + semester_int
