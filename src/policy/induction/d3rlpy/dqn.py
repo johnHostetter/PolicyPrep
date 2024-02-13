@@ -1,7 +1,6 @@
 """
 Use the DQN algorithm from d3rlpy to train a policy.
 """
-import pathlib
 from typing import List
 import multiprocessing as mp
 
@@ -24,7 +23,7 @@ from src.utilities.reproducibility import load_configuration, path_to_project_ro
 # the following are imports required for a closed-sourced library called PySoft
 # if you don't have PySoft, you need to comment out the following imports
 # and the code that uses them
-from soft.computing.wrappers.d3rlpy import (
+from soft.computing.wrappers.old_d3rlpy import (
     CustomEncoderFactory as SoftEncoderFactory,
     CustomMeanQFunctionFactory
 )
@@ -52,66 +51,70 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
     problems = list(config.training.problems)
     problems.insert(0, "problem")
 
-    with mp.Pool(processes=num_workers) as pool:
-        path_to_policy_data_directory = (
-            path_to_project_root()
-            / "data"
-            / "for_policy_induction"
-            / config.training.data.policy
-        )
-        for algo in config.training.algorithms:
-            for problem_id in problems:
-                if problem_id in config.training.skip.problems:
-                    continue
-                if "problem" not in problem_id:
-                    problem_id += "(w)"
-                try:
-                    path_to_data = (
-                        path_to_policy_data_directory / "d3rlpy" / f"{problem_id}.h5"
-                    )
-                    if not path_to_data.exists():
-                        print(
-                            f"{Fore.RED}"
-                            f"Skipping {path_to_data.name} (it does not exist)..."
-                            f"{Style.RESET_ALL}"
-                        )
-                        continue
-                    if path_to_data.is_dir():
-                        print(
-                            f"{Fore.RED}"
-                            f"Skipping {path_to_data.name} (it is a directory)..."
-                            f"{Style.RESET_ALL}"
-                        )
-                        continue
-                    print(
-                        f"{Fore.YELLOW}"
-                        f"Using data from {path_to_data.name}..."
-                        f"{Style.RESET_ALL}"
-                    )
-                    mdp_dataset = MDPDataset.load(str(path_to_data))
-                    print(
-                        f"{Fore.YELLOW}"
-                        f"Using {len(mdp_dataset.episodes)} episodes of data to induce a policy "
-                        f"for {path_to_data.name}..."
-                        f"{Style.RESET_ALL}"
-                    )
-
-                except FileNotFoundError as file_not_found_error:
-                    print(repr(file_not_found_error))
-                    continue
-
-                x = pool.apply_async(
-                    train_d3rlpy_policy,
-                    args=[
-                        mdp_dataset,
-                        problem_id,
-                        d3rlpy.algos.get_algo(algo, discrete=True),
-                        config,
-                    ],
+    # with mp.Pool(processes=num_workers) as pool:
+    path_to_policy_data_directory = (
+        path_to_project_root()
+        / "data"
+        / "for_policy_induction"
+        / config.training.data.policy
+    )
+    for algo in config.training.algorithms:
+        for problem_id in problems:
+            if problem_id in config.training.skip.problems:
+                continue
+            if "problem" not in problem_id:
+                problem_id += "(w)"
+            try:
+                path_to_data = (
+                    path_to_policy_data_directory / "d3rlpy" / f"{problem_id}.h5"
                 )
-                x.get()  # check if any Exception has been thrown and display traceback
-        pool.close()
-        pool.join()
+                if not path_to_data.exists():
+                    print(
+                        f"{Fore.RED}"
+                        f"Skipping {path_to_data.name} (it does not exist)..."
+                        f"{Style.RESET_ALL}"
+                    )
+                    continue
+                if path_to_data.is_dir():
+                    print(
+                        f"{Fore.RED}"
+                        f"Skipping {path_to_data.name} (it is a directory)..."
+                        f"{Style.RESET_ALL}"
+                    )
+                    continue
+                print(
+                    f"{Fore.YELLOW}"
+                    f"Using data from {path_to_data.name}..."
+                    f"{Style.RESET_ALL}"
+                )
+                mdp_dataset = MDPDataset.load(str(path_to_data))
+                print(
+                    f"{Fore.YELLOW}"
+                    f"Using {len(mdp_dataset.episodes)} episodes of data to induce a policy "
+                    f"for {path_to_data.name}..."
+                    f"{Style.RESET_ALL}"
+                )
+
+            except FileNotFoundError as file_not_found_error:
+                print(repr(file_not_found_error))
+                continue
+
+            train_d3rlpy_policy(
+                mdp_dataset, problem_id, d3rlpy.algos.get_algo(algo, discrete=True), config
+            )
+
+        #         x = pool.apply_async(
+        #             train_d3rlpy_policy,
+        #             args=[
+        #                 mdp_dataset,
+        #                 problem_id,
+        #                 d3rlpy.algos.get_algo(algo, discrete=True),
+        #                 config,
+        #             ],
+        #         )
+        #         x.get()  # check if any Exception has been thrown and display traceback
+        # pool.close()
+        # pool.join()
 
 
 def train_d3rlpy_policy(
@@ -267,9 +270,10 @@ def train_d3rlpy_policy(
         q_func_factory=CustomMeanQFunctionFactory(share_encoder=True),
         # keep the following parameters as-is (or change them if you want to experiment)
         use_gpu=torch.cuda.is_available(),
-        learning_rate=3e-4,
-        batch_size=16,
-        alpha=0.1,
+        learning_rate=1e-3,
+        # learning_rate=1e-4,
+        batch_size=64,
+        # alpha=0.1,
     )
 
     def make_terminals(episodes: List[Episode]) -> List[int]:
@@ -305,8 +309,8 @@ def train_d3rlpy_policy(
     algorithm.fit(
         train_episodes,
         eval_episodes=test_episodes,
-        save_interval=100,  # save the model every 500 epochs
-        n_epochs=5,
+        save_interval=350,  # save the model every 500 epochs
+        n_epochs=32,
         logdir=str(path_to_logs),
         scorers={
             "td_error": td_error_scorer,
