@@ -398,7 +398,7 @@ def convert_problem_level_format(
         else:
             user_score: np.ndarray = grades_df[grades_df["userID"] == user_id][
                 config.data.grades.metric
-            ].unique()
+            ].unique().astype(float)
             if len(user_score) == 0:
                 continue  # the result is empty list, skip this user
             nlg = user_score[0]

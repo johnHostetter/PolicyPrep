@@ -1,9 +1,8 @@
 """
 This file is used to train the InferNet model for the problem level data.
 """
-import argparse
 import pickle
-import multiprocessing as mp
+import argparse
 from typing import Tuple, List
 
 from colorama import (
@@ -29,8 +28,8 @@ from src.preprocess.infernet.common import (
     build_model,
     calc_max_episode_length,
 )
-from src.preprocess.infernet.sklearn import Flatten, Reshape
-from src.preprocess.infernet.skorch import InferNet
+from src.preprocess.infernet.sklearn_transformers import Flatten, Reshape
+from src.preprocess.infernet.infernet import InferNet
 from src.utilities.reproducibility import (
     load_configuration,
     set_random_seed,
@@ -86,7 +85,7 @@ def train_infer_net(problem_id: str) -> None:
         # train_split=predefined_split(val_data),
         device="cuda" if torch.cuda.is_available() else "cpu",
         callbacks=[
-            EarlyStopping(patience=10, monitor="valid_loss"),
+            EarlyStopping(patience=3, monitor="valid_loss"),
         ],
     )
 
@@ -313,21 +312,19 @@ def get_features_and_actions(
 
 
 def train_step_level_models(
-    args: argparse.Namespace, config: Config, increase_num_workers: bool = False
+    args: argparse.Namespace,
+    config: Config,
 ) -> None:
     """
     Train the InferNet models for all step-level problems.
 
     Args:
-        args: The command line arguments.
+        args: The command line arguments (unused at the moment).
         config: The configuration object.
-        increase_num_workers: A boolean indicating if the number of workers should be increased.
-        This can be enabled to speed up training, but it may cause memory issues. Defaults to False.
 
     Returns:
         None
     """
-    # with mp.Pool(processes=args.num_workers) as pool:
     for problem_id in config.training.problems:
         print(
             f"{Fore.YELLOW}"
@@ -336,9 +333,6 @@ def train_step_level_models(
         )
         if problem_id not in config.training.skip.problems:
             train_infer_net(f"{problem_id}(w)")
-            # pool.apply_async(train_infer_net, args=(f"{problem_id}(w)",))
-        # pool.close()
-        # pool.join()
     print(
         f"{Fore.GREEN}"
         "\nAll processes finished for training step-level InferNet models."
