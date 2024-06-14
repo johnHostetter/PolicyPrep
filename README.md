@@ -1,41 +1,66 @@
-# The PolicyPrep: An automated workflow for experiment studies
+# PolicyPrep: Automated workflow for experiment studies
 ## Background & Motivation :question:
-Dear Researchers _(with a special shoutout to new Ph.D. students :wave:)_,
+The purpose of PolicyPrep is to automate the process of running experiments with deep learning 
+frameworks like PyTorch (although TensorFlow and others are possible). The pipeline is designed to 
+be run on a remote machine, such as a server, and will run continuously until stopped. 
+**Specifically, this pipeline was built to accommodate offline reinforcement learning of 
+hierarchical policies where the reward information has been delayed.** PolicyPrep will collect data 
+from multiple sources, aggregate the data, infer immediate reward information, and train a policy 
+using reinforcement learning (via d3rlpy) to be used in your next experiment. The pipeline will 
+also generate a report of the results of the experiments and the policy that was trained. I 
+developed PolicyPrep during my Ph.D. to save time and resources for myself and my colleagues where
+we used it to train policies for e-learning apps called Intelligent Tutoring Systems. As such, some
+code may still contain references to this educational domain, but it can be easily modified for your
+own application.
 
-I am writing this to inform you of a new project I have been planning and working on for the past 
-few months. It is called the PolicyPrep (i.e., a data pre-processing and model training pipeline). The purpose of this project is to automate the 
-process of running experiments with deep learning frameworks such as PyTorch (although TensorFlow and others are possible). The pipeline is designed to be run 
-on a remote machine, such as a server, and will run continuously until stopped. The pipeline will run experiments, collect the results, and train a policy using reinforcement learning
-to be used in the next experiment. The pipeline will also generate a report of the results of the experiments
-and the policy that was trained. 
-
-**The PolicyPrep is not only for use with RL policy induction.** That is what its 
-initially created for, but with a few minor tweaks, it can facilitate any experiment-related study, such as Inverse RL (this would be a matter of changing step 9 at this time of writing) or even posthoc analysis. It is meant to be a consistent and uniform platform for all lab members involved in your experiment's projects - at least, in the coming future, it will be.
+**The PolicyPrep is not only for use with RL policy induction.** That is what it's 
+initially created for, but with a few minor tweaks, it can facilitate any experiment-related study, 
+such as Inverse RL (this would be a matter of changing step 9 at this time of writing) or even 
+posthoc analysis. It is meant to be a consistent and uniform platform for all members involved 
+in your experiment's projects - at least, in the coming future, it will be.
 
 Essentially, rather than each of us re-invent the wheel by collecting study data, aggregating 
 it together, etc., the pipeline, at the very least, can perform these operations for you. 
-This would involve running a smaller subset of the total steps in the pipeline or creating your own custom steps and appending those to it (e.g., make it offshoot into doing RL and Inverse RL simultaneously). **The whole purpose of this effort is to save your time so you can focus on other things, such as preparing your research question or having extra free time (yes, a Ph.D. student with free time** :exploding_head:). In the past, I have spent weeks or even months preparing my own local experiment setup, so your savings concerning time are significant. For a new Ph.D. student, a conservative estimate on time saved (as things are right now) amounts to at least 2 months throughout your entire Ph.D., as we have eliminated the need for looking up the data, costly edits, manually updating training data, or writing "fixes" to patch InferNet, as well as formatting the data automatically for you to use with RL (or Inverse RL, as previously stated).
+This would involve running a smaller subset of the total steps in the pipeline or creating your own 
+custom steps and appending those to it (e.g., make it offshoot into doing RL and Inverse RL 
+simultaneously). **The whole purpose of this effort is to save your time, so you can focus on other 
+things, such as preparing your research question or having extra free time (yes, glorious 
+free time** :exploding_head:). In the past, I have spent weeks or even months preparing my own 
+local experiment setup, so your savings concerning time are significant. For a new Ph.D. student, 
+a conservative estimate on time saved (as things are right now) amounts to at least 2 months 
+throughout your entire Ph.D., as we have eliminated the need for looking up the data, costly edits, 
+manually updating training data, or writing "fixes" to patch InferNet, as well as formatting the 
+data automatically for you to use with RL (or Inverse RL, as previously stated).
 
-It also serves as additional documentation on how we perform experiment setup for policies, guiding new students from start to finish on what we expect explicitly, so they can confidently continue their study knowing they have completed the necessary steps correctly.
+It also serves as additional documentation on how we perform experiment setup for policies, 
+guiding new students from start to finish on what we expect explicitly, so they can confidently 
+continue their study knowing they have completed the necessary steps correctly.
 
-Furthermore, by accepting the PolicyPrep in your workflow, it would be easier to assist you if you face trouble implementing your policy, as opposed to "you're on your own" if your code doesn't work. I hope establishing PolicyPrep will allow us to collaborate more closely and pursue research endeavors we otherwise might not have had the time or resources in the past.
+Furthermore, by accepting the PolicyPrep in your workflow, it would be easier to assist you if you 
+face trouble implementing your policy, as opposed to "you're on your own" if your code doesn't work. 
+I hope establishing PolicyPrep will allow us to collaborate more closely and pursue research 
+endeavors we otherwise might not have had the time or resources in the past.
 
 Lastly, the pipeline is meant to be a living project, meaning it will be updated and improved 
 over time. **Under all circumstances, do not hesitate to reach out to me if you have any 
 questions or concerns**. I am more than happy to help you with any issues you may have, and I am 
 open to any suggestions you may have to improve the pipeline. I am also open to any 
-contributions you may have to the project. I am not the best programmer, so I am sure there are
-many ways to improve the code. However, I am confident that the pipeline will be a useful tool
-for all of us. 
+contributions you may have to the project as I am sure there are many ways to improve the code. 
+However, I am confident that the pipeline will be a useful tool for all of us. 
 
-Please do not let the pipeline intimidate you or be a barrier to your research. It is meant to be a tool to help you, not hinder 
-you. I am here to help you with any issues you may have, and I am more than happy to do so. 
+Please do not let the pipeline intimidate you or be a barrier to your research. It is meant to be a 
+tool to help you, not hinder you. Although it was originally designed to be used for 
+Artificial Intelligence in Education, it can be modified for your intended application if it meets 
+the above specified problem criteria (i.e., hierarchical tasks with delayed rewards). I am here to 
+help you with any issues you may have, and I am more than happy to do so. 
 
-If you are interested in working together, please feel free to reach out to me regarding any questions you may have about incorporating the pipeline into your work (jwhostet@ncsu.edu). I would also appreciate any help offered to ensure the robustness of the project.
+If you are interested in working together, please feel free to reach out to me regarding any 
+questions you may have about incorporating the pipeline into your work (jwhostet@ncsu.edu). I would 
+also appreciate any help offered to ensure the robustness of the project.
 
 Sincerely, 
 
-J. W. Hostetter
+John Wesley Hostetter
 ***
 ## Requirements :heavy_check_mark:
 The following are required to run the pipeline:
@@ -43,12 +68,12 @@ The following are required to run the pipeline:
 - Python 3.8.5
 ***
 ## Setup :hammer_and_wrench:
-This project is written in Python 3.8.5. It is recommended to use a virtual environment to run this project.
-The following instructions are for setting up the project on a Linux or macOS machine. The instructions may vary slightly
-for other operating systems. 
+This project is written in Python 3.8.5. It is recommended to use a virtual environment to run 
+this project. The following instructions are for setting up the project on a Linux or macOS machine. 
+The instructions may vary slightly for other operating systems. 
 
-Within PyCharm's markdown preview, the following bash commands can be executed by clicking on the _play_ button that appears
-when hovering over the command.
+Within PyCharm's markdown preview, the following bash commands can be executed by clicking on 
+the _play_ button that appears when hovering over the command.
 
 1. Clone the repository:
     ```bash
