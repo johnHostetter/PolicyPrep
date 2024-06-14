@@ -1,4 +1,4 @@
-# PolicyPrep: Automated workflow for experiment studies
+# PolicyPrep: Reward Shaping & Hierarchical Policies :robot:
 ## Background & Motivation :question:
 The purpose of PolicyPrep is to automate the process of running experiments with deep learning 
 frameworks like PyTorch (although TensorFlow and others are possible). The pipeline is designed to 
