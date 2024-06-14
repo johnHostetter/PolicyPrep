@@ -79,7 +79,7 @@ the _play_ button that appears when hovering over the command.
     ```bash
     git clone https://github.com/johnHostetter/PolicyPrep.git
     ```
-2. Change directory into the T directory:
+2. Change directory into the PolicyPrep directory:
     ```bash
     cd PolicyPrep
     ```
