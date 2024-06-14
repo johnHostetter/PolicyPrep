@@ -1,4 +1,4 @@
-# Pyrenees Pipeline Project - .gitignore
+# PolicyPrep Project - .gitignore
 /data
 logs/
 figures/

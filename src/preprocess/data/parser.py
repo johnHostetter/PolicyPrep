@@ -1,7 +1,7 @@
 """
 This module contains functions for parsing the data into a MDPDataset. The MDPDataset is used to
 train the D3RLPy models. This is particularly useful for using "out-of-the-box" offline
-reinforcement learning solutions to deploy in the Pyrenees application, such as Double Deep
+reinforcement learning solutions to deploy in the desired application, such as Double Deep
 Q-Networks, Conservative Q-Learning, Soft-Actor-Critic, etc. The MDPDataset is a dataset that
 contains the features, actions, rewards, terminals, and next features for each episode. The
 MDPDataset is created by (optionally) merging the features dataframe with the decision info

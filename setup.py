@@ -1,12 +1,12 @@
 """
-Set up the Pyrenees Pipeline project.
+Set up the PolicyPrep project.
 """
 from setuptools import setup, find_packages
 
 setup(
-    name="Pyrenees-Pipeline",
+    name="PolicyPrep",
     version="1.0",
     author="John Wesley Hostetter",
-    author_email="jwhostet@ncsu.edu",
+    author_email="jhostetter@gmail.com",
     packages=find_packages(),
 )

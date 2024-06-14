@@ -1,5 +1,5 @@
 """
-The src/ directory contains the source code for the Pyrenees pipeline. The pipeline is divided into
+The src/ directory contains the source code for the PolicyPrep pipeline. The pipeline is divided into
 several stages, each of which is implemented in a separate subdirectory. The pipeline stages are as
 follows:
 
@@ -13,7 +13,7 @@ Each of these stages is implemented in a separate subdirectory. Each subdirector
 __init__.py file, which contains a docstring that describes the purpose of the subdirectory. For
 example, the docstring for src/policy/__init__.py is as follows:
 
-    This module contains all code related to Pyrenees policies.
+    This module contains all code related to the policies.
 
 The docstrings for the other __init__.py files are similar. The docstrings for the __init__.py
 files in the subdirectories of src/preprocess/ are as follows:
