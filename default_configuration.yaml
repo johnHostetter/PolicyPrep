@@ -1,0 +1,167 @@
+training:
+  seed: 0  # the seed for the random number generator
+  algorithms:
+#    - dqn # the algorithm to be used for training
+    - cql # the algorithm to be used for training
+  skip:  # default values but not used here for this particular experiment
+    users:  # users to be skipped, might not be necessary anymore;  pipeline finds these
+    # automatically, but it is nice to explicitly specify them to know that
+    # this is okay for them to be skipped and not to worry about them
+      - 173220  # user 173220 has less than 12 entries in the problem-level data
+      - 231147  # user 231147 has double entries in the data
+    problems:
+      - ex222  # not trainable for inducing policies
+      - ex144  # not trainable for inducing policies
+  problems:  # FSA_round
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+  actions:
+    problem:  # problem-level actions
+      - problem  # problem solving
+      - step_decision  # collaborate (i.e., faded worked example)
+      - example  # worked example
+    step:  # step-level actions
+      - problem  # elicit
+      - example  # tell
+  data:
+    policy: minmax  # data subdirectory to use for policy induction  (currently used)
+    batch_size: 20  # the batch size for training InferNet
+    num_epochs: 100  # the number of epochs for training InferNet (not used yet)
+    checkpoint: 20000  # the number of iterations for saving a checkpoint  (currently used)
+    num_iterations: 1000000  # the number of iterations for training InferNet  (currently used)
+
+data:
+  folder:  # this is the shareable link to the folder containing the Pyrenees data
+    name: https://drive.google.com/drive/folders/1GhSpf6jIuzsBuCYf6bqheV58WioxyoxI
+  grades:
+    # the grades to be used for training, such as weighted NLG, shortened NLG, etc.
+    name: S24_NLG_with_time_from_S20_to_F23
+    metric: NLG_time_upto_Fall_2023  # the metric to be used for training
+    # whether to look up missing grades in the semester summary data (i.e., user_final_grades.csv);
+    # for example, S23 has no users in the "F23_shortened_NLG_from:F15_to:F22.csv" file because
+    # their NLGs are already the "shortened" tutor version
+    lookup_missing: False  # this must be a boolean value
+    append_from:
+      - S23  # append the grades from S23 to the grades file mentioned above
+      - F23  # append the grades from F23 to the grades file mentioned above
+  features:
+    basic:
+      - row_id
+      - student_id
+      - tutor_id
+      - FSA_round
+      - FSA_score
+    problem:
+      - TM_tutor_KeepTogether
+      - TM_tutor_GetToRelate
+      - TM_tutor_Restating
+      - TM_tutor_PressForAccuracy
+      - TM_tutor_PressForReasoning
+      - TM_tutor_Revoicing
+      - TM_student_RelateToAnotherIdea
+      - TM_student_AskForMoreInfo
+      - TM_student_MakeClaim
+      - TM_student_ProvideEvidence
+      - TM_tutor_KeepTogether_cumul
+      - TM_tutor_GetToRelate_cumul
+      - TM_tutor_Restating_cumul
+      - TM_tutor_PressForAccuracy_cumul
+      - TM_tutor_PressForReasoning_cumul
+      - TM_tutor_Revoicing_cumul
+      - TM_student_RelateToAnotherIdea_cumul
+      - TM_student_AskForMoreInfo_cumul
+      - TM_student_MakeClaim_cumul
+      - TM_student_ProvideEvidence_cumul
+      - TM_tutor_KeepTogether_standard
+      - TM_tutor_GetToRelate_standard
+      - TM_tutor_Restating_standard
+      - TM_tutor_PressForAccuracy_standard
+      - TM_tutor_PressForReasoning_standard
+      - TM_tutor_Revoicing_standard
+      - TM_student_RelateToAnotherIdea_standard
+      - TM_student_AskForMoreInfo_standard
+      - TM_student_MakeClaim_standard
+      - TM_student_ProvideEvidence_standard
+      - MA_SkillCategory_Mastered_BasicArithmeticOperations
+      - MA_SkillCategory_Progress_BasicArithmeticOperations
+      - MA_SkillCategory_Mastered_AlgebraicManipulations
+      - MA_SkillCategory_Progress_AlgebraicManipulations
+      - MA_SkillCategory_Mastered_Representations
+      - MA_SkillCategory_Progress_Representations
+      - MA_SkillCategory_Mastered_ConceptualUnderstanding
+      - MA_SkillCategory_Progress_ConceptualUnderstanding
+      - MA_SkillCategory_Mastered_Selection
+      - MA_SkillCategory_Progress_Selection
+      - MA_SkillCategory_Mastered_DataEntry
+      - MA_SkillCategory_Progress_DataEntry
+      - MA_SkillCategory_Mastered_BasicArithmeticOperations_cumul
+      - MA_SkillCategory_Progress_BasicArithmeticOperations_cumul
+      - MA_SkillCategory_Mastered_AlgebraicManipulations_cumul
+      - MA_SkillCategory_Progress_AlgebraicManipulations_cumul
+      - MA_SkillCategory_Mastered_Representations_cumul
+      - MA_SkillCategory_Progress_Representations_cumul
+      - MA_SkillCategory_Mastered_ConceptualUnderstanding_cumul
+      - MA_SkillCategory_Progress_ConceptualUnderstanding_cumul
+      - MA_SkillCategory_Mastered_Selection_cumul
+      - MA_SkillCategory_Progress_Selection_cumul
+      - MA_SkillCategory_Mastered_DataEntry_cumul
+      - MA_SkillCategory_Progress_DataEntry_cumul
+
+    step:
+      - TM_tutor_KeepTogether
+      - TM_tutor_GetToRelate
+      - TM_tutor_Restating
+      - TM_tutor_PressForAccuracy
+      - TM_tutor_PressForReasoning
+      - TM_tutor_Revoicing
+      - TM_student_RelateToAnotherIdea
+      - TM_student_AskForMoreInfo
+      - TM_student_MakeClaim
+      - TM_student_ProvideEvidence
+      - TM_tutor_KeepTogether_cumul
+      - TM_tutor_GetToRelate_cumul
+      - TM_tutor_Restating_cumul
+      - TM_tutor_PressForAccuracy_cumul
+      - TM_tutor_PressForReasoning_cumul
+      - TM_tutor_Revoicing_cumul
+      - TM_student_RelateToAnotherIdea_cumul
+      - TM_student_AskForMoreInfo_cumul
+      - TM_student_MakeClaim_cumul
+      - TM_student_ProvideEvidence_cumul
+      - TM_tutor_KeepTogether_standard
+      - TM_tutor_GetToRelate_standard
+      - TM_tutor_Restating_standard
+      - TM_tutor_PressForAccuracy_standard
+      - TM_tutor_PressForReasoning_standard
+      - TM_tutor_Revoicing_standard
+      - TM_student_RelateToAnotherIdea_standard
+      - TM_student_AskForMoreInfo_standard
+      - TM_student_MakeClaim_standard
+      - TM_student_ProvideEvidence_standard
+      - MA_SkillCategory_Mastered_BasicArithmeticOperations
+      - MA_SkillCategory_Progress_BasicArithmeticOperations
+      - MA_SkillCategory_Mastered_AlgebraicManipulations
+      - MA_SkillCategory_Progress_AlgebraicManipulations
+      - MA_SkillCategory_Mastered_Representations
+      - MA_SkillCategory_Progress_Representations
+      - MA_SkillCategory_Mastered_ConceptualUnderstanding
+      - MA_SkillCategory_Progress_ConceptualUnderstanding
+      - MA_SkillCategory_Mastered_Selection
+      - MA_SkillCategory_Progress_Selection
+      - MA_SkillCategory_Mastered_DataEntry
+      - MA_SkillCategory_Progress_DataEntry
+      - MA_SkillCategory_Mastered_BasicArithmeticOperations_cumul
+      - MA_SkillCategory_Progress_BasicArithmeticOperations_cumul
+      - MA_SkillCategory_Mastered_AlgebraicManipulations_cumul
+      - MA_SkillCategory_Progress_AlgebraicManipulations_cumul
+      - MA_SkillCategory_Mastered_Representations_cumul
+      - MA_SkillCategory_Progress_Representations_cumul
+      - MA_SkillCategory_Mastered_ConceptualUnderstanding_cumul
+      - MA_SkillCategory_Progress_ConceptualUnderstanding_cumul
+      - MA_SkillCategory_Mastered_Selection_cumul
+      - MA_SkillCategory_Progress_Selection_cumul
+      - MA_SkillCategory_Mastered_DataEntry_cumul
+      - MA_SkillCategory_Progress_DataEntry_cumul
