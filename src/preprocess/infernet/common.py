@@ -34,9 +34,10 @@ def read_data(
         file_name += ".csv"
     data_path = path_to_project_root() / "data" / subdirectory / file_name
     data = pd.read_csv(data_path, header=0)
-    if selected_users is None:
-        return data[data["userID"] > 161000]  # ignore any user before 161000
-    return data[data["userID"].isin(selected_users)]
+    # if selected_users is None:
+    #     return data[data["userID"] > 161000]  # ignore any user before 161000
+    # return data[data["userID"].isin(selected_users)]
+    return data
 
 
 def build_model(in_features: int, hidden_dim=128) -> TimeDistributed:

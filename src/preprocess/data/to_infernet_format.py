@@ -396,9 +396,11 @@ def convert_problem_level_format(
                 except IndexError:
                     prob_lvl_feature_df.iat[i, action_col_location] = unique_actions
         else:
-            user_score: np.ndarray = grades_df[grades_df["userID"] == user_id][
-                config.data.grades.metric
-            ].unique().astype(float)
+            user_score: np.ndarray = (
+                grades_df[grades_df["userID"] == user_id][config.data.grades.metric]
+                .unique()
+                .astype(float)
+            )
             if len(user_score) == 0:
                 continue  # the result is empty list, skip this user
             nlg = user_score[0]

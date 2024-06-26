@@ -259,7 +259,8 @@ def data_frame_to_d3rlpy_dataset(
         ],
         value=[0, 0, 1, 1, 2, 3],
     )
-    actions = features_df[action_column].values[:, None]
+    # actions must be integers
+    actions = features_df[action_column].values[:, None].astype(int)
 
     # the reward is the inferred reward
     try:

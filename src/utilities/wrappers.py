@@ -1,4 +1,5 @@
 import torch
+from colorama import Fore, Style  # for cross-platform colored text in the terminal
 
 
 class TimeDistributed(torch.nn.Module):
@@ -66,3 +67,33 @@ class TimeDistributed(torch.nn.Module):
             )  # (timesteps, samples, output_size)
 
         return module_output
+
+
+def cprint(text: str, color: str) -> None:
+    """
+    Print the output in a given color.
+
+    Args:
+        text: The string to display.
+    """
+    print(f"{color}" f"{text}" f"{Style.RESET_ALL}")
+
+
+def yprint(text: str) -> None:
+    """
+    Print the output in yellow.
+
+    Args:
+        text: The string to display.
+    """
+    cprint(text, Fore.YELLOW)
+
+
+def gprint(text: str) -> None:
+    """
+    Print the output in yellow.
+
+    Args:
+        text: The string to display.
+    """
+    cprint(text, Fore.GREEN)

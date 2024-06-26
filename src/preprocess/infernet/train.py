@@ -59,9 +59,10 @@ def train_infer_net(problem_id: str) -> None:
     max_len = calc_max_episode_length(mdp_dataset)
 
     # select the features and actions depending on if the data is problem-level or step-level
-    state_features, possible_actions = get_features_and_actions(
-        config, is_problem_level
-    )
+    # state_features, possible_actions = get_features_and_actions(
+    #     config, is_problem_level
+    # )
+    possible_actions: List[int] = np.unique(mdp_dataset.actions).tolist()
 
     print(
         f"{Fore.YELLOW}"
@@ -71,7 +72,7 @@ def train_infer_net(problem_id: str) -> None:
 
     NUM_OF_SELECTED_FEATURES = 30
     model = build_model(
-        NUM_OF_SELECTED_FEATURES + len(possible_actions) + 1  # + 1 for no-op action
+        NUM_OF_SELECTED_FEATURES + len(possible_actions)  # + 1  # + 1 for no-op action
     )
 
     # create the skorch wrapper
@@ -137,10 +138,8 @@ def train_infer_net(problem_id: str) -> None:
     nn_reg.fit(
         np.concatenate(
             [
-                pipeline.transform(mdp_dataset.observations)[
-                    :, :-1, :
-                ],  # remove the last step
-                one_hot_encoded_actions[:, :-1, :],  # remove the last step
+                pipeline.transform(mdp_dataset.observations)[:, :, :],
+                one_hot_encoded_actions[:, :, :],
             ],
             axis=-1,
         ).astype(
@@ -286,10 +285,14 @@ def infernet_setup(problem_id: str) -> Tuple[bool, MDPDataset, pd.DataFrame]:
     # determine if the data is problem-level or step-level
     is_problem_level = "problem" in problem_id
     original_data = read_data(problem_id, "for_inferring_rewards", selected_users=None)
+    # TODO: this is a temporary fix to get d3rlpy MDPDataset working (it does not allow NaN)
+    # TODO: the temporary fix is original_data.fillna(value=0.0) in the following!
     # the following function will create a MDPDataset as well as further clean the data once more
-    mdp_dataset, original_data = data_frame_to_d3rlpy_dataset(
-        original_data, problem_id, padding=True  # InferNet requires padding
-    )
+    mdp_dataset, _ = data_frame_to_d3rlpy_dataset(
+        original_data.fillna(value=0.0, inplace=False),
+        problem_id,
+        padding=True,  # InferNet requires padding
+    )  # TODO: also am now ignoring the original_data returned by the previous function
     return is_problem_level, mdp_dataset, original_data
 
 
@@ -341,4 +344,5 @@ def train_step_level_models(
 
 
 if __name__ == "__main__":
-    train_infer_net(problem_id="problem")
+    # train_infer_net(problem_id="problem")
+    train_infer_net(problem_id="fsa_round_1(w).csv")

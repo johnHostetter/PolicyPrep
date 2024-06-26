@@ -13,11 +13,11 @@ training:
       - ex222  # not trainable for inducing policies
       - ex144  # not trainable for inducing policies
   problems:  # FSA_round
-    - 1
-    - 2
-    - 3
-    - 4
-    - 5
+    - fsa_round_1
+    - fsa_round_2
+    - fsa_round_3
+    - fsa_round_4
+    - fsa_round_5
   actions:
     problem:  # problem-level actions
       - problem  # problem solving
@@ -61,7 +61,7 @@ data:
       - TM_tutor_PressForAccuracy
       - TM_tutor_PressForReasoning
       - TM_tutor_Revoicing
-      - TM_student_RelateToAnotherIdea
+#      - TM_student_RelateToAnotherIdea  # TODO: whatever feature is used for action must be removed
       - TM_student_AskForMoreInfo
       - TM_student_MakeClaim
       - TM_student_ProvideEvidence
@@ -71,7 +71,7 @@ data:
       - TM_tutor_PressForAccuracy_cumul
       - TM_tutor_PressForReasoning_cumul
       - TM_tutor_Revoicing_cumul
-      - TM_student_RelateToAnotherIdea_cumul
+#      - TM_student_RelateToAnotherIdea_cumul  # TODO: whatever feature is used for action must be removed
       - TM_student_AskForMoreInfo_cumul
       - TM_student_MakeClaim_cumul
       - TM_student_ProvideEvidence_cumul
@@ -81,7 +81,7 @@ data:
       - TM_tutor_PressForAccuracy_standard
       - TM_tutor_PressForReasoning_standard
       - TM_tutor_Revoicing_standard
-      - TM_student_RelateToAnotherIdea_standard
+#      - TM_student_RelateToAnotherIdea_standard  # TODO: whatever feature is used for action must be removed
       - TM_student_AskForMoreInfo_standard
       - TM_student_MakeClaim_standard
       - TM_student_ProvideEvidence_standard
@@ -117,7 +117,7 @@ data:
       - TM_tutor_PressForAccuracy
       - TM_tutor_PressForReasoning
       - TM_tutor_Revoicing
-      - TM_student_RelateToAnotherIdea
+#      - TM_student_RelateToAnotherIdea  # TODO: whatever feature is used for action must be removed
       - TM_student_AskForMoreInfo
       - TM_student_MakeClaim
       - TM_student_ProvideEvidence
@@ -127,7 +127,7 @@ data:
       - TM_tutor_PressForAccuracy_cumul
       - TM_tutor_PressForReasoning_cumul
       - TM_tutor_Revoicing_cumul
-      - TM_student_RelateToAnotherIdea_cumul
+#      - TM_student_RelateToAnotherIdea_cumul  # TODO: whatever feature is used for action must be removed
       - TM_student_AskForMoreInfo_cumul
       - TM_student_MakeClaim_cumul
       - TM_student_ProvideEvidence_cumul
@@ -137,7 +137,7 @@ data:
       - TM_tutor_PressForAccuracy_standard
       - TM_tutor_PressForReasoning_standard
       - TM_tutor_Revoicing_standard
-      - TM_student_RelateToAnotherIdea_standard
+#      - TM_student_RelateToAnotherIdea_standard  # TODO: whatever feature is used for action must be removed
       - TM_student_AskForMoreInfo_standard
       - TM_student_MakeClaim_standard
       - TM_student_ProvideEvidence_standard

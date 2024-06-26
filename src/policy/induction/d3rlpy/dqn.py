@@ -20,12 +20,13 @@ from d3rlpy.metrics import td_error_scorer, average_value_estimation_scorer
 from YACS.yacs import Config
 from src.policy.induction.d3rlpy.nas import modify_algorithm
 from src.utilities.reproducibility import load_configuration, path_to_project_root
+
 # the following are imports required for a closed-sourced library called PySoft
 # if you don't have PySoft, you need to comment out the following imports
 # and the code that uses them
 from soft.computing.wrappers.old_d3rlpy import (
     CustomEncoderFactory as SoftEncoderFactory,
-    CustomMeanQFunctionFactory
+    CustomMeanQFunctionFactory,
 )
 from soft.computing.wrappers.supervised import SupervisedDataset
 from soft.computing.blueprints.factory import SystematicDesignProcess
@@ -100,7 +101,10 @@ def induce_policies_with_d3rlpy(num_workers: int = 1) -> None:
                 continue
 
             train_d3rlpy_policy(
-                mdp_dataset, problem_id, d3rlpy.algos.get_algo(algo, discrete=True), config
+                mdp_dataset,
+                problem_id,
+                d3rlpy.algos.get_algo(algo, discrete=True),
+                config,
             )
 
         #         x = pool.apply_async(
